@@ -495,19 +495,40 @@ print("Tip: after writing to /persist, run: await persist_sync()")
     });
 
     async function bootPyodide(){
-        try{
-            if (pyStatus) pyStatus.textContent = "loading...";
-            pyodide = await loadPyodide({ indexURL: "./" });
+        if (pyStatus) pyStatus.textContent = "loading...";
+        const cdnUrl = "https://cdn.jsdelivr.net/pyodide/v0.29.3/full/";
+        const localUrl = "./";
+        let loadedFromCdn = false;
 
-            await setupFilesystems(pyodide);
+        try {
+            // Try loading from CDN first
+            appendOut("Attempting to load Pyodide from CDN...");
+            pyodide = await loadPyodide({ indexURL: cdnUrl });
+            loadedFromCdn = true;
+            appendOut("Pyodide loaded successfully from CDN.");
+        } catch (cdnErr) {
+            appendOut(`Failed to load Pyodide from CDN: ${cdnErr}. Attempting local load...`);
+            try {
+                // Fallback to local load
+                pyodide = await loadPyodide({ indexURL: localUrl });
+                appendOut("Pyodide loaded successfully from local files.");
+            } catch (localErr) {
+                if (pyStatus) pyStatus.textContent = "failed ❌";
+                if (ReplTitleStatus) ReplTitleStatus.style.color = "red";
+                appendOut("Failed to load Pyodide locally. Please ensure Pyodide files are in the correct directory.\n" + localErr);
+                return;
+            }
+        }
 
-            pyodide.setStdout({ batched: (s) => appendOut(s) });
-            pyodide.setStderr({ batched: (s) => appendOut(s) });
+        await setupFilesystems(pyodide);
 
-            if (pyStatus) pyStatus.textContent = "ready \u2705";
-            if (ReplTitleStatus) ReplTitleStatus.style.color = "green";
+        pyodide.setStdout({ batched: (s) => appendOut(s) });
+        pyodide.setStderr({ batched: (s) => appendOut(s) });
 
-            await pyodide.runPythonAsync(`
+        if (pyStatus) pyStatus.textContent = "ready ✅";
+        if (ReplTitleStatus) ReplTitleStatus.style.color = "green";
+
+        await pyodide.runPythonAsync(`
 import sys, traceback
 
 def _repl_exec(code: str):
@@ -522,16 +543,12 @@ def _repl_exec(code: str):
         traceback.print_exc()
 `);
 
-            if (out) out.textContent = "";
-            appendOut("Pyodide ready. Try: import sys; sys.version");
-            await refreshList();
-        }catch(err){
-            if (pyStatus) pyStatus.textContent = "failed \u274C";
-            if (ReplTitleStatus) ReplTitleStatus.style.color = "red";
-            appendOut("Failed to load Pyodide.\n" + err);
-        }
+        if (out) out.textContent = "";
+        appendOut("Pyodide ready. Try: import sys; sys.version");
+        await refreshList();
     }
 
+    // Move bootPyodide() call here to ensure `loadPyodide` is defined.
     bootPyodide();
 
     async function runCode(){
