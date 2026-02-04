@@ -338,6 +338,27 @@ Win11-ish File Explorer panel inside REPL
     color: rgba(251,113,133,.95);
 }
 
+[data-theme="terminal"] .winAction{
+    background: rgba(0,0,0,.55);
+    border-color: rgba(0,255,0,.25);
+    color: rgba(0,255,0,.90);
+}
+[data-theme="terminal"] .winAction:hover{
+    background: rgba(0,255,0,.12);
+    border-color: rgba(0,255,0,.35);
+    color: #00ff00;
+}
+[data-theme="terminal"] .winAction.primary{
+    background: rgba(0,255,0,.15);
+    border-color: rgba(0,255,0,.45);
+    color: #00ff00;
+}
+[data-theme="terminal"] .winAction.danger{
+    background: rgba(255,70,70,.16);
+    border-color: rgba(255,70,70,.35);
+    color: rgba(255,160,160,.95);
+}
+
 #uploadInput{
     display:none;
 }

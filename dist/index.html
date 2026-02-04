@@ -1,0 +1,2469 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+
+    <title>Python internals decoding ring — dunders + non-dunder runtime attrs + floating Py REPL</title>
+
+    <!-- Pyodide loader (online-accessible WASM runtime) -->
+    <script src="./pyodide.js"></script>
+
+<style>:root{:root{--bg:#0b1020;--panel:rgba(255,255,255,.06);--panel2:rgba(255,255,255,.09);--text:rgba(255,255,255,.92);--muted:rgba(255,255,255,.68);--faint:rgba(255,255,255,.45);--accent:#7dd3fc;--accent2:#a78bfa;--good:#34d399;--warn:#fbbf24;--bad:#fb7185;--mono:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;--sans:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,"Apple Color Emoji","Segoe UI Emoji";--shadow:0 18px 60px rgba(0,0,0,.45);--radius:18px}[data-theme="terminal"]{--bg:#0a0f0a;--panel:rgba(0,255,0,.08);--panel2:rgba(0,255,0,.12);--text:#00ff00;--muted:rgba(0,255,0,.75);--faint:rgba(0,255,0,.50);--accent:#00ff41;--accent2:#00cc33;--good:#00ff00;--warn:#ffff00;--bad:#ff0000;--mono:'Courier New',Consolas,'Liberation Mono',monospace;--sans:'Courier New',Consolas,'Liberation Mono',monospace;--shadow:0 18px 60px rgba(0,0,0,.80);--radius:6px}[data-theme="terminal"] body{background:radial-gradient(1200px 600px at 20% -10%,rgba(0,255,0,.15),transparent 55%),radial-gradient(900px 500px at 90% 10%,rgba(0,255,65,.12),transparent 50%),radial-gradient(1000px 700px at 60% 110%,rgba(0,204,51,.10),transparent 55%),linear-gradient(180deg,#050a05 0%,#0a0f0a 55%,#040804 100%)}}:root,.theme-default{--bg:#0b1020;--panel:rgba(255,255,255,.06);--panel2:rgba(255,255,255,.09);--text:rgba(255,255,255,.92);--muted:rgba(255,255,255,.68);--faint:rgba(255,255,255,.45);--accent:#7dd3fc;--accent2:#a78bfa;--good:#34d399;--warn:#fbbf24;--bad:#fb7185;--shadow:0 18px 60px rgba(0,0,0,.45)}.theme-terminal{--bg:#0a0e0a;--panel:rgba(0,255,65,.08);--panel2:rgba(0,255,65,.12);--text:rgba(0,255,65,.95);--muted:rgba(0,255,65,.75);--faint:rgba(0,255,65,.50);--accent:#00ff41;--accent2:#39ff14;--good:#00ff41;--warn:#ffff00;--bad:#ff0040;--shadow:0 18px 60px rgba(0,0,0,.65)}*{box-sizing:border-box}body{margin:0;font-family:var(--sans);color:var(--text);background:radial-gradient(1200px 600px at 20% -10%,rgba(167,139,250,.25),transparent 55%),radial-gradient(900px 500px at 90% 10%,rgba(125,211,252,.22),transparent 50%),radial-gradient(1000px 700px at 60% 110%,rgba(52,211,153,.18),transparent 55%),linear-gradient(180deg,#060913 0%,#0b1020 55%,#070a14 100%);min-height:100vh}.theme-terminal body{background:radial-gradient(1200px 600px at 20% -10%,rgba(0,255,65,.15),transparent 55%),radial-gradient(900px 500px at 90% 10%,rgba(57,255,20,.12),transparent 50%),radial-gradient(1000px 700px at 60% 110%,rgba(0,255,65,.10),transparent 55%),linear-gradient(180deg,#040a04 0%,#0a0e0a 55%,#030803 100%)}header{max-width:1240px;margin:0 auto;padding:40px 18px 14px;position:relative}.theme-selector{position:absolute;top:20px;right:18px;display:flex;gap:8px;align-items:center}.theme-selector label{font-size:12px;color:var(--muted);margin:0}.theme-selector select{padding:6px 10px;font-size:12px;border-radius:8px;background:var(--panel);border:1px solid rgba(255,255,255,.14);color:var(--text);outline:none}.theme-selector select:focus{border-color:var(--accent);box-shadow:0 0 0 2px rgba(125,211,252,.10)}.theme-terminal .theme-selector select:focus{box-shadow:0 0 0 2px rgba(0,255,65,.15)}.hero{position:relative;border-radius:var(--radius);padding:26px 22px;background:linear-gradient(135deg,rgba(255,255,255,.08),rgba(255,255,255,.04));box-shadow:var(--shadow);overflow:hidden}.hero:before{content:"";position:absolute;inset:-2px;background:radial-gradient(800px 240px at 20% 0%,rgba(125,211,252,.28),transparent 60%),radial-gradient(900px 260px at 80% 10%,rgba(167,139,250,.22),transparent 60%);filter:blur(18px);opacity:.9;z-index:0}.hero > *{position:relative;z-index:1}h1{margin:0 0 8px;font-weight:800;letter-spacing:-.02em;line-height:1.15;font-size:clamp(24px,2.4vw,38px)}.sub{margin:0;color:var(--muted);line-height:1.55;max-width:98ch;font-size:14.5px}main{max-width:1240px;margin:0 auto;padding:16px 18px 100px}.pillbar{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px;align-items:center}.theme-selector{display:flex;gap:6px;align-items:center;margin-left:auto}.theme-btn{padding:6px 12px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.05);color:var(--muted);font-size:12px;cursor:pointer;transition:all 0.2s ease;font-weight:600;text-transform:uppercase;letter-spacing:.5px}.theme-btn.active{background:var(--accent);color:var(--bg);border-color:var(--accent);font-weight:700}.theme-btn:hover:not(.active){background:rgba(255,255,255,.10);border-color:rgba(255,255,255,.25)}[data-theme="terminal"] .theme-btn{border-color:rgba(0,255,0,.25);background:rgba(0,255,0,.08);color:var(--muted)}[data-theme="terminal"] .theme-btn.active{background:var(--accent);color:var(--bg);border-color:var(--accent);box-shadow:0 0 8px rgba(0,255,0,.4)}[data-theme="terminal"] .theme-btn:hover:not(.active){background:rgba(0,255,0,.15);border-color:rgba(0,255,0,.35)}.pill{font-family:var(--mono);font-size:12.5px;padding:8px 10px;border-radius:999px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.10);color:rgba(255,255,255,.82);user-select:none;white-space:nowrap}.pill strong{color:var(--accent);font-weight:900}.controls{display:grid;grid-template-columns:1.4fr .8fr .8fr;gap:12px;margin-top:14px}@media (max-width:920px){.controls{grid-template-columns:1fr}}.control{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.10);border-radius:14px;padding:12px;backdrop-filter:blur(8px)}label{display:block;font-size:12px;color:var(--faint);margin-bottom:6px}input,select,textarea,button{font-family:var(--sans)}input,select{width:100%;padding:11px 12px;border-radius:12px;border:1px solid rgba(255,255,255,.14);background:rgba(5,8,18,.55);color:var(--text);outline:none;font-size:14px}input:focus,select:focus{border-color:rgba(125,211,252,.55);box-shadow:0 0 0 4px rgba(125,211,252,.10)}.stats{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0 6px}.stat{padding:10px 12px;border-radius:14px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.10);color:var(--muted);font-size:13px;backdrop-filter:blur(8px)}.stat b{color:var(--text)}.kbd{font-family:var(--mono);padding:2px 7px;border-radius:9px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.10);color:rgba(255,255,255,.86);font-size:12px}.sectionTitle{margin:18px 0 8px;font-size:16px;letter-spacing:.01em;color:rgba(255,255,255,.88);display:flex;align-items:center;gap:10px}.sectionTitle .dot{width:10px;height:10px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent2));box-shadow:0 0 0 5px rgba(125,211,252,.08)}.tablewrap{margin-top:10px;border-radius:var(--radius);overflow:hidden;border:1px solid rgba(255,255,255,.10);background:rgba(255,255,255,.04);box-shadow:var(--shadow)}table{width:100%;border-collapse:collapse}thead th{text-align:left;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:rgba(255,255,255,.72);background:rgba(255,255,255,.07);padding:12px 12px;border-bottom:1px solid rgba(255,255,255,.10);position:sticky;top:0;z-index:2}tbody td{padding:12px 12px;vertical-align:top;border-bottom:1px solid rgba(255,255,255,.07);color:rgba(255,255,255,.86);font-size:14px;line-height:1.5}tbody tr:hover{background:rgba(125,211,252,.06)}code,.chip{font-family:var(--mono);font-size:12.8px}.chip{display:inline-flex;gap:8px;align-items:center;padding:6px 10px;border-radius:999px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.10);white-space:nowrap}.tag{display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border-radius:999px;font-size:12px;border:1px solid rgba(255,255,255,.10);background:rgba(255,255,255,.05);color:rgba(255,255,255,.78);white-space:nowrap}.tag.dunder{border-color:rgba(125,211,252,.25);color:rgba(125,211,252,.92);background:rgba(125,211,252,.08)}.tag.nond{border-color:rgba(251,191,36,.25);color:rgba(251,191,36,.92);background:rgba(251,191,36,.08)}.tag.warn{border-color:rgba(251,113,133,.25);color:rgba(251,113,133,.92);background:rgba(251,113,133,.08)}.tiny{font-size:12px;color:var(--muted)}.example{margin-top:6px;padding:10px 12px;border-radius:14px;border:1px solid rgba(255,255,255,.10);background:rgba(5,8,18,.45);color:rgba(255,255,255,.88);overflow:auto}.example pre{margin:0;font-family:var(--mono);font-size:12.5px;line-height:1.45;white-space:pre}details{margin-top:12px;border-radius:var(--radius);border:1px solid rgba(255,255,255,.10);background:rgba(255,255,255,.04);box-shadow:var(--shadow);overflow:hidden}summary{cursor:pointer;padding:14px 14px;background:rgba(255,255,255,.06);color:rgba(255,255,255,.9);user-select:none;display:flex;align-items:center;justify-content:space-between;gap:12px;font-weight:700}summary .muted{font-weight:500;color:var(--muted)}details > .detailsBody{padding:14px;color:rgba(255,255,255,.86)}footer{max-width:1240px;margin:0 auto;padding:18px 18px 40px;color:var(--muted);font-size:13px}a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}#repl{position:fixed;right:18px;bottom:18px;width:720px;height:min(66vh,560px);min-width:360px;min-height:100px;border-radius:18px;border:1px solid rgba(255,255,255,.14);background:rgba(10,14,28,.78);box-shadow:0 22px 70px rgba(0,0,0,.55);backdrop-filter:blur(10px);z-index:999999;overflow:hidden;display:flex;flex-direction:column}[data-theme="terminal"] #repl{background:rgba(0,0,0,.95);border-color:rgba(0,255,0,.30);box-shadow:0 22px 70px rgba(0,0,0,.80),0 0 20px rgba(0,255,0,.15)}#explorerWindow{position:fixed;left:18px;bottom:18px;width:560px;height:min(70vh,600px);min-width:360px;min-height:260px;border-radius:18px;border:1px solid rgba(255,255,255,.14);background:rgba(10,14,28,.78);box-shadow:0 22px 70px rgba(0,0,0,.55);backdrop-filter:blur(10px);z-index:1000000;overflow:hidden;display:flex;flex-direction:column}[data-theme="terminal"] #explorerWindow{background:rgba(0,0,0,.95);border-color:rgba(0,255,0,.30);box-shadow:0 22px 70px rgba(0,0,0,.80),0 0 20px rgba(0,255,0,.15)}#explorerWindow.hidden{display:none}#explorerWindow.minimized #explorerBody{display:none}#explorerWindow.minimized{height:auto}#explorerWindow.minimized .repl-resizer{display:none}#explorerWindow.maximized{left:0;top:0;right:0;bottom:0;width:100%;height:100vh;border-radius:0}#explorerWindow.maximized .repl-resizer{display:none}#replHeaderControls{display:flex;gap:6px;align-items:center}#dockFloat{display:none}#repl.docked #dockFloat{display:inline-flex}#repl.docked #dockLeft,#repl.docked #dockRight,#repl.docked #dockTop,#repl.docked #dockBottom,#repl.docked #dockLT,#repl.docked #dockLB,#repl.docked #dockRT,#repl.docked #dockRB,#repl.docked #dockTL,#repl.docked #dockTR,#repl.docked #dockBL,#repl.docked #dockBR{display:none}#repl.dock-right,#repl.dock-left,#repl.dock-top,#repl.dock-bottom{border-radius:0}#explorerHeader{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;background:rgba(255,255,255,.07);border-bottom:1px solid rgba(255,255,255,.10);cursor:grab;user-select:none}[data-theme="terminal"] #explorerHeader{background:rgba(0,20,0,.60);border-bottom-color:rgba(0,255,0,.20)}#explorerHeader:active{cursor:grabbing}#explorerTitle{font-weight:800;letter-spacing:.01em}#explorerHeaderControls{display:flex;gap:6px;align-items:center}#explorerDockFloat{display:none}#explorerWindow.docked #explorerDockFloat{display:inline-flex}#explorerWindow.docked #explorerDockLeft,#explorerWindow.docked #explorerDockRight,#explorerWindow.docked #explorerDockTop,#explorerWindow.docked #explorerDockBottom,#explorerWindow.docked #explorerDockLT,#explorerWindow.docked #explorerDockLB,#explorerWindow.docked #explorerDockRT,#explorerWindow.docked #explorerDockRB,#explorerWindow.docked #explorerDockTL,#explorerWindow.docked #explorerDockTR,#explorerWindow.docked #explorerDockBL,#explorerWindow.docked #explorerDockBR{display:none}#explorerWindow.dock-right,#explorerWindow.dock-left,#explorerWindow.dock-top,#explorerWindow.dock-bottom{border-radius:0}#explorerBody{flex:1 1 auto;min-height:0;display:flex;flex-direction:column}#replHeader{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;background:rgba(255,255,255,.07);border-bottom:1px solid rgba(255,255,255,.10);cursor:grab;user-select:none}[data-theme="terminal"] #replHeader{background:rgba(0,20,0,.60);border-bottom-color:rgba(0,255,0,.20)}#replHeader:active{cursor:grabbing}#replTitle{display:flex;align-items:center;gap:10px;font-weight:800;letter-spacing:.01em}#replTitleStatus{color:goldenrod}#replTitle .badge{font-family:var(--mono);font-size:12px;padding:3px 8px;border-radius:999px;background:rgba(125,211,252,.10);border:1px solid rgba(125,211,252,.22);color:rgba(125,211,252,.92)}#replBtns{display:flex;gap:4px;align-items:center}.btn{border:none;background:none;border:1px solid rgba(255,255,255,.20);box-shadow:none;color:rgba(255,255,255,.92);padding:4px 8px;border-radius:3px;cursor:pointer;font-weight:500;font-size:11px;backdrop-filter:blur(8px);transition:all 0.15s ease;font-family:var(--mono);text-transform:uppercase;letter-spacing:0.5px}[data-theme="terminal"] .btn{border-color:rgba(0,255,0,.30);color:rgba(0,255,0,.90);padding:3px 6px;border-radius:2px;font-size:10px;font-weight:700}.btn:hover{background:rgba(255,255,255,.10);border-color:rgba(255,255,255,.35)}.btn:active{background:rgba(255,255,255,.15);transform:none}[data-theme="terminal"] .btn:hover{background:rgba(0,255,0,.15);border-color:rgba(0,255,0,.50);color:#00ff00}[data-theme="terminal"] .btn:active{background:rgba(0,255,0,.25);color:#00ff00}.btn.primary{background:none;border-color:rgba(52,211,153,.30);color:rgba(52,211,153,.98);box-shadow:none}.btn.primary:hover{background:rgba(52,211,153,.15);border-color:rgba(52,211,153,.50)}.btn.warn{background:none;border-color:rgba(251,113,133,.30);color:rgba(251,113,133,.98);box-shadow:none}.btn.warn:hover{background:rgba(251,113,133,.15);border-color:rgba(251,113,133,.50)}[data-theme="terminal"] .btn.primary{border-color:rgba(0,255,0,.40);color:rgba(0,255,0,.95)}[data-theme="terminal"] .btn.primary:hover{background:rgba(0,255,0,.20);border-color:rgba(0,255,0,.60);color:#00ff00}[data-theme="terminal"] .btn.warn{border-color:rgba(255,255,0,.40);color:rgba(255,255,0,.95)}[data-theme="terminal"] .btn.warn:hover{background:rgba(255,255,0,.20);border-color:rgba(255,255,0,.60);color:#ffff00}#replCollapse{background:none;border:none;border-radius:0;padding:6px 10px;font-weight:bold;font-size:14px;min-width:28px;box-shadow:none;transition:all 0.1s ease}#replCollapse:hover{background:linear-gradient(180deg,rgba(125,211,252,.12) 0%,rgba(125,211,252,.04) 100%);border-color:rgba(125,211,252,.25);color:rgba(125,211,252,.95);box-shadow:inset 0 1px 0 rgba(125,211,252,.15),0 1px 3px rgba(0,0,0,.25),0 0 6px rgba(125,211,252,.10)}#replCollapse:active{background:linear-gradient(180deg,rgba(0,0,0,.08) 0%,rgba(255,255,255,.05) 100%);box-shadow:inset 0 1px 2px rgba(0,0,0,.20);transform:none}#replBody{display:flex;flex-direction:column;gap:10px;padding:12px}#replBody{overflow:auto;flex:1 1 auto;min-height:0;padding-bottom:12px}[data-theme="terminal"] #replBody{background:rgba(0,0,0,.40)}#replStatus{display:flex;align-items:center;justify-content:space-between;gap:10px;color:var(--muted);font-size:12.5px}#replStatus code{color:rgba(255,255,255,.82)}#replOut{background:rgba(5,8,18,.55);border:1px solid rgba(255,255,255,.10);border-radius:14px;padding:10px 10px;overflow:auto;max-height:200px;font-family:var(--mono);font-size:12.5px;line-height:1.45;color:rgba(255,255,255,.90);white-space:pre-wrap}[data-theme="terminal"] #replOut{background:rgba(0,10,0,.80);border-color:rgba(0,255,0,.25);color:#00ff00}#replInWrap{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:start;position:sticky;bottom:0;z-index:3;background:rgba(5,8,18,.65);padding-top:8px}[data-theme="terminal"] #replInWrap{background:rgba(0,0,0,.75)}.dock-split{position:fixed;z-index:1000002;display:none;background:rgba(255,255,255,.12);box-shadow:0 0 6px rgba(0,0,0,.35)}[data-theme="terminal"] .dock-split{background:rgba(0,255,0,.25);box-shadow:0 0 8px rgba(0,255,0,.25)}.dock-split-right{height:6px;cursor:row-resize}.dock-split-bottom{width:6px;cursor:col-resize}.repl-resizer{position:absolute;z-index:6;background:transparent}.repl-resizer:hover{background:rgba(255,255,255,.06)}[data-theme="terminal"] .repl-resizer:hover{background:rgba(0,255,0,.12)}.repl-resizer-n{top:-4px;left:8px;right:8px;height:8px;cursor:n-resize}.repl-resizer-s{bottom:-4px;left:8px;right:8px;height:8px;cursor:s-resize}.repl-resizer-e{right:-4px;top:8px;bottom:8px;width:8px;cursor:e-resize}.repl-resizer-w{left:-4px;top:8px;bottom:8px;width:8px;cursor:w-resize}.repl-resizer-ne{right:-4px;top:-4px;width:12px;height:12px;cursor:ne-resize}.repl-resizer-nw{left:-4px;top:-4px;width:12px;height:12px;cursor:nw-resize}.repl-resizer-se{right:-4px;bottom:-4px;width:12px;height:12px;cursor:se-resize}.repl-resizer-sw{left:-4px;bottom:-4px;width:12px;height:12px;cursor:sw-resize}#repl.dock-right .repl-resizer,#repl.dock-left .repl-resizer,#repl.dock-top .repl-resizer,#repl.dock-bottom .repl-resizer,#explorerWindow.dock-right .repl-resizer,#explorerWindow.dock-left .repl-resizer,#explorerWindow.dock-top .repl-resizer,#explorerWindow.dock-bottom .repl-resizer{display:none}#repl.dock-right .repl-resizer-w,#explorerWindow.dock-right .repl-resizer-w{display:block}#repl.dock-left .repl-resizer-e,#explorerWindow.dock-left .repl-resizer-e{display:block}#repl.dock-bottom .repl-resizer-n,#explorerWindow.dock-bottom .repl-resizer-n{display:block}#repl.dock-top .repl-resizer-s,#explorerWindow.dock-top .repl-resizer-s{display:block}#replIn{width:100%;resize:vertical;padding:10px 12px;border-radius:14px;border:1px solid rgba(255,255,255,.14);background:rgba(5,8,18,.55);color:rgba(255,255,255,.92);outline:none;font-family:var(--mono);font-size:12.8px;line-height:1.45;min-height:1.5em;overflow:hidden;padding:4px;box-sizing:border-box}#replIn:focus{border-color:rgba(125,211,252,.55);box-shadow:0 0 0 4px rgba(125,211,252,.10)}#replHelp{color:rgba(255,255,255,.70);font-size:12px;line-height:1.35}#replCollapsed{display:none;padding:10px 12px;color:rgba(255,255,255,.82);font-size:13px;background:rgba(255,255,255,.03)}#repl.collapsed #replBody{display:none}#repl.collapsed #replCollapsed{display:block}#repl.collapsed{height:min-content !important;width:min-content !important}#repl.collapsed #replExplorerToggle{display:none}#repl.collapsed #replSave{display:none}#repl.collapsed #replReload{display:none}#repl.collapsed #replReset{display:none}#repl.collapsed #replClear{display:none}:root{--winGlass:rgba(22,26,40,.78);--winGlass2:rgba(255,255,255,.08);--winStroke:rgba(255,255,255,.14);--winStroke2:rgba(125,211,252,.26);--winText2:rgba(255,255,255,.72)}#replBody{max-height:none}#replExplorer{border:1px solid var(--winStroke);background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.03));border-radius:16px;overflow:hidden;display:flex;flex-direction:column;flex:1 1 auto;min-height:0}[data-theme="terminal"] #replExplorer{background:rgba(0,0,0,.90);border-color:rgba(0,255,0,.25)}#replExplorerTop{display:flex;flex-direction:column;gap:8px;padding:10px;background:rgba(255,255,255,.06);border-bottom:1px solid rgba(255,255,255,.10)}[data-theme="terminal"] #replExplorerTop{background:rgba(0,20,0,.40);border-bottom-color:rgba(0,255,0,.20)}.winPathRow{display:flex;gap:8px;align-items:center;width:100%}.winPath{flex:1;display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:12px;background:rgba(5,8,18,.45);border:1px solid rgba(255,255,255,.12);font-family:var(--mono);font-size:12.5px;color:rgba(255,255,255,.90);overflow:hidden;white-space:nowrap;text-overflow:ellipsis}.winBtnRow{display:flex;gap:6px;align-items:center}[data-theme="terminal"] .winPath{background:rgba(0,0,0,.70);border-color:rgba(0,255,0,.20);color:#00ff00}.winMiniBtn{border:none;cursor:pointer;padding:6px 8px;border-radius:8px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);color:rgba(255,255,255,.88);font-weight:800;font-size:11px;min-width:32px}.winBtnRow .winMiniBtn{flex:1}.winPathRow .winMiniBtn{flex:none;width:32px}.winMiniBtn:hover{background:rgba(255,255,255,.10)}.winMiniBtn:active{transform:translateY(1px)}#replCollapse{font-weight:bold;font-size:1.2em}[data-theme="terminal"] .winMiniBtn{background:rgba(0,0,0,.60);border-color:rgba(0,255,0,.20);color:rgba(0,255,0,.90)}[data-theme="terminal"] .winMiniBtn:hover{background:rgba(0,255,0,.15);border-color:rgba(0,255,0,.35);color:#00ff00}#replExplorerBody{display:grid;grid-template-columns:230px 1fr;gap:0;min-height:220px;position:relative;flex:1 1 auto;min-height:0;overflow:hidden}#replExplorerLeft{border-right:1px solid rgba(255,255,255,.10);background:rgba(10,14,28,.35);padding:10px;display:flex;flex-direction:column;min-height:0}[data-theme="terminal"] #replExplorerLeft{background:rgba(0,0,0,.60);border-right-color:rgba(0,255,0,.15)}.winNav{display:flex;gap:8px;margin-bottom:10px}.winNavBtn{flex:1;padding:8px 10px;border-radius:12px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);color:rgba(255,255,255,.85);cursor:pointer;font-weight:800;font-size:12.5px}.winNavBtn.active{border-color:var(--winStroke2);background:rgba(125,211,252,.10);color:rgba(125,211,252,.95)}#fileList{max-height:none;overflow:auto;padding-right:2px;flex:1 1 auto;min-height:0}[data-theme="terminal"] .winNavBtn{background:rgba(0,0,0,.40);border-color:rgba(0,255,0,.20);color:rgba(0,255,0,.85)}[data-theme="terminal"] .winNavBtn.active{background:rgba(0,255,0,.15);border-color:rgba(0,255,0,.40);color:#00ff00}.fileRow{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;border-radius:12px;cursor:pointer;border:1px solid transparent;color:rgba(255,255,255,.86)}.fileRow:hover{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.10)}.fileRow.active{background:rgba(125,211,252,.10);border-color:rgba(125,211,252,.22)}[data-theme="terminal"] .fileRow{color:rgba(0,255,0,.90)}[data-theme="terminal"] .fileRow:hover{background:rgba(0,255,0,.08);border-color:rgba(0,255,0,.20)}[data-theme="terminal"] .fileRow.active{background:rgba(0,255,0,.15);border-color:rgba(0,255,0,.30);color:#00ff00}.fileName{display:flex;align-items:center;gap:8px;min-width:0}.fileName span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.fileMeta{font-family:var(--mono);font-size:11.5px;color:var(--winText2);white-space:nowrap}#replExplorerRight{padding:10px;background:rgba(5,8,18,.25);display:flex;flex-direction:column;min-height:0}#btnExpand{position:absolute;right:6px;top:50%;transform:translateY(-50%);min-width:34px;height:30px;padding:0 6px;display:inline-flex;align-items:center;justify-content:center;z-index:2;opacity:0.7;background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.22);box-shadow:0 2px 8px rgba(0,0,0,.25)}[data-theme="terminal"] #btnExpand{background:rgba(0,255,0,.10);border-color:rgba(0,255,0,.35);color:#00ff00;box-shadow:0 0 8px rgba(0,255,0,.15)}#fileEditorTitle{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}#fileEditorTitle .name{font-weight:900;letter-spacing:.01em}#fileEditorTitle .hint{color:var(--winText2);font-size:12px;font-family:var(--mono)}#fileEditor{width:100%;min-height:180px;max-height:none;resize:vertical;padding:10px 12px;border-radius:14px;border:1px solid rgba(255,255,255,.14);background:rgba(5,8,18,.55);color:rgba(255,255,255,.92);outline:none;font-family:var(--mono);font-size:12.6px;line-height:1.45;flex:1 1 auto}#fileEditor:focus{border-color:rgba(125,211,252,.55);box-shadow:0 0 0 4px rgba(125,211,252,.10)}#fileActions{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;align-items:center;margin-top:auto}.winAction{padding:8px 10px;border-radius:12px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.06);color:rgba(255,255,255,.88);cursor:pointer;font-weight:900;font-size:12.5px}.winAction:hover{background:rgba(255,255,255,.10)}.winAction.primary{background:rgba(52,211,153,.12);border-color:rgba(52,211,153,.22);color:rgba(52,211,153,.95)}.winAction.danger{background:rgba(251,113,133,.12);border-color:rgba(251,113,133,.22);color:rgba(251,113,133,.95)}[data-theme="terminal"] .winAction{background:rgba(0,0,0,.55);border-color:rgba(0,255,0,.25);color:rgba(0,255,0,.90)}[data-theme="terminal"] .winAction:hover{background:rgba(0,255,0,.12);border-color:rgba(0,255,0,.35);color:#00ff00}[data-theme="terminal"] .winAction.primary{background:rgba(0,255,0,.15);border-color:rgba(0,255,0,.45);color:#00ff00}[data-theme="terminal"] .winAction.danger{background:rgba(255,70,70,.16);border-color:rgba(255,70,70,.35);color:rgba(255,160,160,.95)}#uploadInput{display:none}#explorerWindow.hidden #replExplorer{display:none}#explorerWindow.explorerMini #replExplorerBody{grid-template-columns:1fr}#explorerWindow.explorerMini #replExplorerRight{display:none}#explorerWindow.explorerMini #fileList{max-height:260px}#explorerWindow.explorerMini #replExplorer{max-height:320px}</style>
+</head> <!-- /head -->
+
+<body>
+
+<header>
+    <div class="hero">
+        <h1>Python internals decoding ring 🧠⚙️</h1>
+        <p class="sub">
+            Two maps in one:
+            <br>• <b>Dunders</b> (<code>__x__</code>) — the special “hooks” Python itself calls for operators, iteration, attribute access, async, pickling…
+            <br>• <b>Non-dunder internals</b> — the runtime attributes you’ll still encounter in tracebacks, profiling, debuggers, decorators, and the ecosystem.
+            <br><br>
+            Bonus: a <b>floating, collapsible, always-on-top Python REPL</b> powered by <b>Pyodide (CPython → WebAssembly)</b>.
+        </p>
+
+        <div class="pillbar">
+            <div class="pill"><strong>Search:</strong> <code>__matmul__</code> · <code>__traceback__</code> · <code>co_varnames</code> · <code>gi_frame</code></div> <!-- /div.pill -->
+            <div class="pill"><strong>Hotkeys:</strong> <span class="kbd">/</span> focus search · <span class="kbd">Ctrl</span>+<span class="kbd">Enter</span> run REPL</div> <!-- /div.pill -->
+            <div class="pill"><strong>Reality:</strong> community libs add internals, but most avoid new <code>__x__</code> names (reserved).</div> <!-- /div.pill -->
+
+            <div class="theme-selector">
+                <span style="font-size: 12px; color: var(--faint); margin-right: 6px;">Theme:</span>
+                <button class="theme-btn active" data-theme="default">Default</button>
+                <button class="theme-btn" data-theme="terminal">Terminal</button>
+            </div>
+        </div> <!-- /div.pillbar -->
+    </div> <!-- /div.hero -->
+</header> <!-- /header -->
+
+<main>
+    <div class="controls">
+        <div class="control">
+            <label for="q">Search (name, meaning, example)</label>
+            <input id="q" type="text" placeholder="e.g. __getattribute__ | __traceback__ | co_names | f_locals | wraps | inspect" />
+        </div> <!-- /div.control -->
+
+        <div class="control">
+            <label for="cat">Category</label>
+            <select id="cat">
+                <option value="all">All</option>
+                <option value="dunder">Dunders (language data model)</option>
+                <option value="nond">Non-dunder internals (runtime objects)</option>
+                <option value="tooling">Tooling / ecosystem internals</option>
+            </select> <!-- /select#cat -->
+        </div> <!-- /div.control -->
+
+        <div class="control">
+            <label for="kind">Kind</label>
+            <select id="kind">
+                <option value="all">All</option>
+                <option value="dunder">__dunder__</option>
+                <option value="nond">non-dunder</option>
+            </select> <!-- /select#kind -->
+        </div> <!-- /div.control -->
+    </div> <!-- /div.controls -->
+
+    <div class="stats">
+        <div class="stat">Showing: <b id="shown">0</b> / <b id="total">0</b></div> <!-- /div.stat -->
+        <div class="stat">Filter: <span class="muted" id="filterLabel">none</span></div> <!-- /div.stat -->
+    </div> <!-- /div.stats -->
+    <div class="sectionTitle"><span class="dot"></span> Dunders you'll actually encounter</div>
+    <!-- /div.sectionTitle -->
+    <div class="tablewrap">
+        <table id="t1">
+            <thead>
+            <tr>
+                <th style="width: 250px;">Name</th>
+                <th style="width: 140px;">Type</th>
+                <th style="width: 220px;">Where</th>
+                <th>Meaning & when it's used</th>
+            </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div> <!-- /div.tablewrap -->
+
+    <div class="sectionTitle" style="margin-top:22px;"><span class="dot"></span> Non-dunder internals you'll still see
+        in the wild
+    </div> <!-- /div.sectionTitle -->
+    <div class="tablewrap">
+        <table id="t2">
+            <thead>
+            <tr>
+                <th style="width: 250px;">Name</th>
+                <th style="width: 160px;">Object</th>
+                <th style="width: 220px;">Where</th>
+                <th>Meaning & why you'll see it</th>
+            </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div> <!-- /div.tablewrap -->
+
+    <details>
+        <summary>
+            "Always-on-top" REPL details <span class="muted">WASM via Pyodide, draggable, collapsible</span>
+        </summary>
+        <div class="detailsBody">
+            <div class="tiny">
+                This REPL runs <b>CPython compiled to WebAssembly</b> using Pyodide. It's "online-accessible" because it
+                loads
+                the runtime from a CDN. To make it offline, download the pyodide distribution and change the <code>indexURL</code>
+                in the script at the bottom of the page.
+                <br><br>
+                <b>Controls:</b>
+                <ul>
+                    <li><code>Ctrl+Enter</code> runs the code in the editor.</li>
+                    <li><code>Clear</code> wipes the output pane.</li>
+                    <li><code>▾</code> collapses the REPL to a slim bar.</li>
+                    <li>Drag the header to move it around.</li>
+                </ul>
+            </div>
+        </div> <!-- /div.detailsBody -->
+    </details>
+</main>
+<footer>
+    If you ever wonder “why did Python call that?”—search for the syntax (like <code>a @ b</code> or <code>for x in y</code>),
+    then look up the dunder hook. If you wonder “what is that weird attribute in a traceback?”—it’s usually in the non-dunder table.
+</footer> <!-- /footer -->
+
+<!-- ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+     Floating REPL (always on top)
+ ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── -->
+<div id="repl" aria-label="Floating Python REPL" class="collapsed">
+    <div id="replHeader">
+        <div id="replTitle">
+            <span id="replTitleStatus">Python REPL</span>
+        </div> <!-- /div#replTitle -->
+        <div id="replHeaderControls">
+            <button class="btn" id="dockLeft" title="Dock left (full)">L</button>
+            <button class="btn" id="dockRight" title="Dock right (full)">R</button>
+            <button class="btn" id="dockTop" title="Dock top (full)">T</button>
+            <button class="btn" id="dockBottom" title="Dock bottom (full)">B</button>
+            <button class="btn" id="dockLT" title="Dock left top">LT</button>
+            <button class="btn" id="dockLB" title="Dock left bottom">LB</button>
+            <button class="btn" id="dockRT" title="Dock right top">RT</button>
+            <button class="btn" id="dockRB" title="Dock right bottom">RB</button>
+            <button class="btn" id="dockTL" title="Dock top left">TL</button>
+            <button class="btn" id="dockTR" title="Dock top right">TR</button>
+            <button class="btn" id="dockBL" title="Dock bottom left">BL</button>
+            <button class="btn" id="dockBR" title="Dock bottom right">BR</button>
+            <button class="btn" id="dockFloat" title="Float window">Float</button>
+            <button class="btn" id="replCollapse" title="Collapse / expand">+</button>
+        </div> <!-- /div#replHeaderControls -->
+    </div> <!-- /div#replHeader -->
+
+    <div id="replCollapsed">
+        Collapsed. Click <b>+</b> to expand.
+        Status: <code id="pyStatus">loading…</code>
+    </div> <!-- /div#replCollapsed -->
+
+    <div id="replBody">
+
+        <div id="replBtns">
+            <button class="btn" id="replExplorerToggle" title="Toggle Explorer">Files</button>
+            <button class="btn" id="replSave" title="Flush /persist → IndexedDB">Save</button>
+            <button class="btn" id="replClear" title="Clear output">Clear</button>
+        </div> <!-- /div#replBtns -->
+        <div id="replOut" role="log" aria-live="polite">Status: <code id="pyStatus">loading…</code></div> <!-- /div#replOut -->
+
+        <!-- REPL Input -->
+        <div id="replInWrap">
+        <textarea id="replIn" spellcheck="false">print(sys)</textarea>
+            <button class="btn primary" id="replRun" title="Run (Ctrl+Enter)">Run</button>
+        </div> <!-- /div#replInWrap -->
+
+    </div> <!-- /div#replBody -->
+    <div class="repl-resizer repl-resizer-n" data-dir="n"></div>
+    <div class="repl-resizer repl-resizer-s" data-dir="s"></div>
+    <div class="repl-resizer repl-resizer-e" data-dir="e"></div>
+    <div class="repl-resizer repl-resizer-w" data-dir="w"></div>
+    <div class="repl-resizer repl-resizer-ne" data-dir="ne"></div>
+    <div class="repl-resizer repl-resizer-nw" data-dir="nw"></div>
+    <div class="repl-resizer repl-resizer-se" data-dir="se"></div>
+    <div class="repl-resizer repl-resizer-sw" data-dir="sw"></div>
+</div> <!-- /div#repl -->
+
+<!-- ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+|    Floating File Explorer Window
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────-->
+<div id="explorerWindow" aria-label="Floating File Explorer" class="floating-window hidden explorerMini">
+    <div id="explorerHeader">
+        <div id="explorerTitle">File Explorer</div>
+        <div id="explorerHeaderControls">
+            <button class="btn" id="explorerDockLeft" title="Dock left (full)">L</button>
+            <button class="btn" id="explorerDockRight" title="Dock right (full)">R</button>
+            <button class="btn" id="explorerDockTop" title="Dock top (full)">T</button>
+            <button class="btn" id="explorerDockBottom" title="Dock bottom (full)">B</button>
+            <button class="btn" id="explorerDockLT" title="Dock left top">LT</button>
+            <button class="btn" id="explorerDockLB" title="Dock left bottom">LB</button>
+            <button class="btn" id="explorerDockRT" title="Dock right top">RT</button>
+            <button class="btn" id="explorerDockRB" title="Dock right bottom">RB</button>
+            <button class="btn" id="explorerDockTL" title="Dock top left">TL</button>
+            <button class="btn" id="explorerDockTR" title="Dock top right">TR</button>
+            <button class="btn" id="explorerDockBL" title="Dock bottom left">BL</button>
+            <button class="btn" id="explorerDockBR" title="Dock bottom right">BR</button>
+            <button class="btn" id="explorerDockFloat" title="Float window">Float</button>
+            <button class="btn" id="explorerMinimize" title="Minimize">Min</button>
+            <button class="btn" id="explorerMaximize" title="Maximize">Max</button>
+            <button class="btn" id="explorerClose" title="Close">X</button>
+        </div> <!-- /div#explorerHeaderControls -->
+    </div> <!-- /div#explorerHeader -->
+
+    <div id="explorerBody">
+        <div id="replExplorer" aria-label="Mini File Explorer">
+            <div id="replExplorerTop">
+                <div class="winPathRow">
+                    <div class="winPath" id="winPath">/persist</div> <!-- /div.winPath -->
+                </div>
+
+                <div class="winBtnRow">
+                    <button class="winMiniBtn" id="btnUp" title="Up one folder">..</button>
+                    <button class="winMiniBtn" id="btnReload" title="Refresh list">⟳</button>
+
+                </div>
+
+            </div> <!-- /div#replExplorerTop -->
+
+            <div id="replExplorerBody">
+                <div id="replExplorerLeft">
+                    <div class="winNav">
+                        <button class="winNavBtn active" id="navPersist">Persist</button>
+                        <button class="winNavBtn" id="navTmp">Temp</button>
+                        <button class="btn warn" id="replReset" title="Delete ALL persistent files">Reset</button>
+                    </div> <!-- /div.winNav -->
+
+                    <div id="fileList"></div> <!-- /div#fileList -->
+                </div> <!-- /div#replExplorerLeft -->
+
+                <div id="replExplorerRight">
+                    <div id="fileEditorTitle">
+                        <div>
+                            <div class="name" id="editorName">No file selected</div> <!-- /div.name -->
+                            <div class="hint" id="editorPathHint">Click a file to edit</div> <!-- /div.hint -->
+                        </div> <!-- /div -->
+                        <div class="hint" id="dirtyHint"></div> <!-- /div.hint -->
+                    </div> <!-- /div#fileEditorTitle -->
+
+                    <textarea id="fileEditor" spellcheck="false" placeholder="Select a file, or create a new one…"></textarea>
+
+                    <div id="fileActions">
+                        <button class="winAction" id="btnNewFile">New File</button>
+                        <button class="winAction" id="btnNewFolder">New Folder</button>
+                        <button class="winAction primary" id="btnSaveFile">Save</button>
+                        <button class="winAction" id="btnDownload">Download</button>
+                        <button class="winAction" id="btnUpload">Upload</button>
+                        <button class="winAction danger" id="btnDelete">Delete</button>
+                        <input type="file" id="uploadInput" />
+                    </div> <!-- /div#fileActions -->
+                </div> <!-- /div#replExplorerRight -->
+                <button class="winMiniBtn" id="btnExpand" title="Toggle mini/full">+</button>
+            </div> <!-- /div#replExplorerBody -->
+        </div> <!-- /div#replExplorer -->
+    </div> <!-- /div#explorerBody -->
+
+    <div class="repl-resizer repl-resizer-n" data-dir="n"></div>
+    <div class="repl-resizer repl-resizer-s" data-dir="s"></div>
+    <div class="repl-resizer repl-resizer-e" data-dir="e"></div>
+    <div class="repl-resizer repl-resizer-w" data-dir="w"></div>
+    <div class="repl-resizer repl-resizer-ne" data-dir="ne"></div>
+    <div class="repl-resizer repl-resizer-nw" data-dir="nw"></div>
+    <div class="repl-resizer repl-resizer-se" data-dir="se"></div>
+    <div class="repl-resizer repl-resizer-sw" data-dir="sw"></div>
+</div> <!-- /div#explorerWindow -->
+
+<div id="dockSplitRight" class="dock-split dock-split-right"></div>
+<div id="dockSplitLeft" class="dock-split dock-split-right"></div>
+<div id="dockSplitBottom" class="dock-split dock-split-bottom"></div>
+<div id="dockSplitTop" class="dock-split dock-split-bottom"></div>
+
+<script>let pyStatus = null;
+let out = null;
+let input = null;
+let runBtn = null;
+let clearBtn = null;
+let collapseBtn = null;
+let repl = null;
+let explorerToggleBtn = null;
+let dockRTBtn = null;
+let dockRBBtn = null;
+let dockBLBtn = null;
+let dockBRBtn = null;
+let dockLTBtn = null;
+let dockLBBtn = null;
+let dockTLBtn = null;
+let dockTRBtn = null;
+let dockLeftBtn = null;
+let dockRightBtn = null;
+let dockTopBtn = null;
+let dockBottomBtn = null;
+let dockFloatBtn = null;
+let explorerWindow = null;
+let explorerHeader = null;
+let explorerBody = null;
+let explorerDockRTBtn = null;
+let explorerDockRBBtn = null;
+let explorerDockBLBtn = null;
+let explorerDockBRBtn = null;
+let explorerDockLTBtn = null;
+let explorerDockLBBtn = null;
+let explorerDockTLBtn = null;
+let explorerDockTRBtn = null;
+let explorerDockLeftBtn = null;
+let explorerDockRightBtn = null;
+let explorerDockTopBtn = null;
+let explorerDockBottomBtn = null;
+let explorerDockFloatBtn = null;
+let explorerMinBtn = null;
+let explorerMaxBtn = null;
+let explorerCloseBtn = null;
+let dockSplitRight = null;
+let dockSplitLeft = null;
+let dockSplitBottom = null;
+let dockSplitTop = null;
+
+const dockState = { repl: null, explorer: null };
+const dockGroups = {
+    right: { width: null, split: 0.5 },
+    left: { width: null, split: 0.5 },
+    bottom: { height: null, split: 0.5 },
+    top: { height: null, split: 0.5 }
+};
+
+let elPath = null;
+let elList = null;
+let elEditor = null;
+let elEditorName = null;
+let elEditorHint = null;
+let elDirty = null;
+
+let navPersist = null;
+let navTmp = null;
+
+let btnUp = null;
+let btnReload = null;
+let btnNewFile = null;
+let btnNewFolder = null;
+let btnSaveFile = null;
+let btnDelete = null;
+let btnDownload = null;
+let btnUpload = null;
+let uploadInput = null;
+let btnExpand = null;
+let ReplTitleStatus = null;
+
+// -------------------------------------------------------------
+// Data: Dunders (selected, common, real-world)
+// -------------------------------------------------------------
+const DUNDERS = [
+    // lifecycle / representation
+    ["__new__", "dunder", "class", "Create instance (before __init__), used for immutables & metaprogramming."],
+    ["__init__", "dunder", "instance", "Initialize instance after creation."],
+    ["__del__", "dunder", "instance", "Finalizer (GC-time). Avoid for critical resource cleanup."],
+    ["__repr__", "dunder", "instance", "Dev-facing representation (REPL/debug/logs)."],
+    ["__str__", "dunder", "instance", "Human-facing string (print, f-strings)."],
+    ["__format__", "dunder", "instance", "Custom format() / f-string formatting."],
+    ["__bytes__", "dunder", "instance", "bytes(obj) conversion."],
+    ["__sizeof__", "dunder", "instance", "sys.getsizeof hook."],
+    ["__call__", "dunder", "instance", "Make an instance callable: obj(...)."],
+
+    // attribute access / descriptors
+    ["__getattribute__", "dunder", "instance", "Runs on every attribute access. Very powerful; easy to infinite-loop."],
+    ["__getattr__", "dunder", "instance", "Runs only if normal lookup fails (dynamic proxies)."],
+    ["__setattr__", "dunder", "instance", "Runs on attribute set. Use object.__setattr__ to avoid recursion."],
+    ["__delattr__", "dunder", "instance", "Runs on attribute delete."],
+    ["__dir__", "dunder", "instance/class", "Customize dir(obj)."],
+    ["__get__", "dunder", "descriptor", "Descriptor protocol: access hook (powers properties, methods)."],
+    ["__set__", "dunder", "descriptor", "Descriptor protocol: assignment hook."],
+    ["__delete__", "dunder", "descriptor", "Descriptor protocol: deletion hook."],
+    ["__set_name__", "dunder", "descriptor", "Called at class creation with owner + attribute name."],
+
+    // containers / iteration
+    ["__len__", "dunder", "container", "len(x). Also truthiness fallback if __bool__ missing."],
+    ["__bool__", "dunder", "any", "bool(x) / if x: ..."],
+    ["__contains__", "dunder", "container", "x in container"],
+    ["__iter__", "dunder", "iterable", "iter(x) / for loops"],
+    ["__next__", "dunder", "iterator", "next(it) / for loops"],
+    ["__getitem__", "dunder", "seq/map", "x[i], x[slice], x[key]"],
+    ["__setitem__", "dunder", "mutable seq/map", "x[i] = v"],
+    ["__delitem__", "dunder", "mutable seq/map", "del x[i]"],
+    ["__reversed__", "dunder", "sequence", "reversed(x)"],
+    ["__missing__", "dunder", "dict subclass", "dict missing-key hook"],
+    ["__length_hint__", "dunder", "iterator", "optional size hint for performance"],
+
+    // operators (selected "most encountered")
+    ["__add__", "dunder", "numeric", "x + y"],
+    ["__sub__", "dunder", "numeric", "x - y"],
+    ["__mul__", "dunder", "numeric", "x * y"],
+    ["__matmul__", "dunder", "numeric", "x @ y (matrix multiply protocol)"],
+    ["__truediv__", "dunder", "numeric", "x / y"],
+    ["__floordiv__", "dunder", "numeric", "x // y"],
+    ["__mod__", "dunder", "numeric", "x % y"],
+    ["__pow__", "dunder", "numeric", "x ** y"],
+    ["__neg__", "dunder", "numeric", "-x"],
+    ["__abs__", "dunder", "numeric", "abs(x)"],
+    ["__round__", "dunder", "numeric", "round(x, n)"],
+    ["__and__", "dunder", "bitwise", "x & y"],
+    ["__or__", "dunder", "bitwise", "x | y"],
+    ["__xor__", "dunder", "bitwise", "x ^ y"],
+    ["__invert__", "dunder", "bitwise", "~x"],
+    ["__lshift__", "dunder", "bitwise", "x << y"],
+    ["__rshift__", "dunder", "bitwise", "x >> y"],
+    ["__eq__", "dunder", "compare", "x == y"],
+    ["__lt__", "dunder", "compare", "x < y"],
+    ["__hash__", "dunder", "hashing", "hash(x) for dict/set keys"],
+
+    // context / async
+    ["__enter__", "dunder", "context manager", "with x: entry hook"],
+    ["__exit__", "dunder", "context manager", "with x: exit hook (can suppress exception)"],
+    ["__aenter__", "dunder", "async context", "async with x: entry hook"],
+    ["__aexit__", "dunder", "async context", "async with x: exit hook"],
+    ["__await__", "dunder", "awaitable", "await x protocol"],
+    ["__aiter__", "dunder", "async iterable", "async for protocol"],
+    ["__anext__", "dunder", "async iterator", "async for next protocol"],
+
+    // exceptions
+    ["__traceback__", "dunder", "exception", "Traceback object for an exception (stack frames)."],
+    ["__cause__", "dunder", "exception", "Explicit chaining: raise X from Y"],
+    ["__context__", "dunder", "exception", "Implicit chaining (error during handling)."],
+    ["__suppress_context__", "dunder", "exception", "Suppress showing __context__ (raise X from None)."],
+    ["__notes__", "dunder", "exception", "Extra notes attached to exception (Python 3.11+)."],
+
+    // typing / modern class features
+    ["__annotations__", "dunder", "module/class/function", "Type hints live here (huge in modern tooling)."],
+    ["__class_getitem__", "dunder", "class", "Implements C[T] (generics / typing)."],
+    ["__init_subclass__", "dunder", "base class", "Called when subclass is created (registries/validation)."],
+    ["__match_args__", "dunder", "class", "Pattern matching positional attribute names."],
+
+    // module/function/class identity
+    ["__name__", "dunder", "module/function/class", "Object name; used by __main__ idiom."],
+    ["__qualname__", "dunder", "function/class", "Qualified nested name."],
+    ["__module__", "dunder", "function/class", "Module where defined."],
+    ["__dict__", "dunder", "instance/class/module", "Attribute storage mapping (if present)."],
+    ["__slots__", "dunder", "class", "Declare fixed attrs to reduce memory / speed access."],
+    ["__all__", "dunder", "module", "Public export list for `from x import *`."],
+    ["__file__", "dunder", "module", "Module filename (if available)."],
+    ["__package__", "dunder", "module", "Package name used for relative imports."],
+    ["__spec__", "dunder", "module", "Import machinery ModuleSpec."],
+];
+
+// -------------------------------------------------------------
+// Data: Non-dunder internals you'll encounter in tracebacks,
+// inspect/debuggers, decorators, generators/coroutines, code objects.
+// -------------------------------------------------------------
+const NOND = [
+    // Traceback objects (tb_*)
+    ["tb_frame", "nond", "traceback", "Traceback \u2192 frame at this level (inspectable stack frame)."],
+    ["tb_lineno", "nond", "traceback", "Line number for this traceback level."],
+    ["tb_next", "nond", "traceback", "Next traceback (caller) link."],
+
+    // Frame objects (f_*)
+    ["f_code", "nond", "frame", "The code object being executed in this frame."],
+    ["f_locals", "nond", "frame", "Local variables mapping (debuggers love this)."],
+    ["f_globals", "nond", "frame", "Global variables mapping for the frame."],
+    ["f_builtins", "nond", "frame", "Builtins mapping used in name resolution."],
+    ["f_lineno", "nond", "frame", "Current line number in the frame."],
+    ["f_back", "nond", "frame", "Previous (caller) frame."],
+
+    // Code objects (co_*)
+    ["co_name", "nond", "code object", "Function/code name."],
+    ["co_qualname", "nond", "code object", "Qualified name (where available)."],
+    ["co_filename", "nond", "code object", "Filename where code was defined."],
+    ["co_firstlineno", "nond", "code object", "First line number of the code object."],
+    ["co_varnames", "nond", "code object", "Local variable names."],
+    ["co_argcount", "nond", "code object", "Number of positional args."],
+    ["co_posonlyargcount", "nond", "code object", "Number of positional-only args."],
+    ["co_kwonlyargcount", "nond", "code object", "Number of keyword-only args."],
+    ["co_names", "nond", "code object", "Names referenced by bytecode (globals/attrs)."],
+    ["co_consts", "nond", "code object", "Constants used by bytecode (literals, nested code)."],
+    ["co_freevars", "nond", "code object", "Free variables (from enclosing scopes)."],
+    ["co_cellvars", "nond", "code object", "Cell variables captured by inner functions."],
+
+    // Functions & decorators (not dunder, but common)
+    ["__wrapped__", "nond", "function (decorators)", "Set by functools.wraps; points to the original function. Massive in tooling."],
+    ["__signature__", "nond", "function (tooling)", "Sometimes set by libs to override inspect.signature output."],
+
+    // Generators (gi_*)
+    ["gi_frame", "nond", "generator", "Frame object of generator (debug/inspect)."],
+    ["gi_code", "nond", "generator", "Code object of generator."],
+    ["gi_running", "nond", "generator", "True if generator is currently executing."],
+
+    // Coroutines / async (cr_*)
+    ["cr_frame", "nond", "coroutine", "Frame of coroutine (debug/inspect)."],
+    ["cr_code", "nond", "coroutine", "Code object of coroutine."],
+    ["cr_running", "nond", "coroutine", "True if coroutine is currently executing."],
+
+    // Async generators (ag_*)
+    ["ag_frame", "nond", "async generator", "Frame of async generator."],
+    ["ag_code", "nond", "async generator", "Code object of async generator."],
+    ["ag_running", "nond", "async generator", "True if async generator is running."],
+
+    // Exceptions common non-dunder fields you'll still inspect
+    ["args", "nond", "exception", "Tuple of arguments passed to the exception."],
+
+    // Dataclasses / attrs / pydantic ecosystem-ish (common to see)
+    ["__dataclass_fields__", "nond", "dataclasses", "Dataclasses store field metadata here."],
+    ["__dataclass_params__", "nond", "dataclasses", "Dataclass configuration parameters."],
+    ["model_fields", "nond", "pydantic (v2)", "Field definitions in pydantic models (very common in apps)."],
+    ["model_dump", "nond", "pydantic (v2)", "Serialize model data; shows up everywhere in modern Python."],
+
+    // Packaging/runtime
+    ["__version__", "nond", "modules/packages", "Very common convention for package version (not guaranteed)."],
+];
+
+
+// -------------------------------------------------------------
+// Rendering + filtering
+// -------------------------------------------------------------
+function escapeHTML(s){
+    return (s+"")
+        .replaceAll("&","&amp;")
+        .replaceAll("<","&lt;")
+        .replaceAll(">","&gt;")
+        .replaceAll('"',"&quot;")
+        .replaceAll("'","&#039;");
+}
+
+function renderTables(){
+    const t1 = document.querySelector("#t1 tbody");
+    const t2 = document.querySelector("#t2 tbody");
+
+    t1.innerHTML = DUNDERS.map(([name, kind, where, meaning]) => `
+        <tr data-kind="${kind}" data-cat="dunder"
+            data-hay="${escapeHTML((name+" "+where+" "+meaning).toLowerCase()).replaceAll("\n"," ")}">
+          <td><span class="chip">${escapeHTML(name)}</span></td>
+          <td><span class="tag dunder">__dunder__</span></td>
+          <td>
+            <div><b>${escapeHTML(where)}</b></div>
+            <div class="tiny">Language data model</div>
+          </td>
+          <td>${escapeHTML(meaning)}</td>
+        </tr>
+      `).join("");
+
+    t2.innerHTML = NOND.map(([name, kind, obj, meaning]) => `
+        <tr data-kind="${kind}" data-cat="${(name==="__version__" || name==="model_fields" || name==="model_dump") ? "tooling" : "nond"}"
+            data-hay="${escapeHTML((name+" "+obj+" "+meaning).toLowerCase()).replaceAll("\n"," ")}">
+          <td><span class="chip">${escapeHTML(name)}</span></td>
+          <td><span class="tag nond">non-dunder</span></td>
+          <td>
+            <div><b>${escapeHTML(obj)}</b></div>
+            <div class="tiny">Runtime / tooling</div>
+          </td>
+          <td>${escapeHTML(meaning)}</td>
+        </tr>
+      `).join("");
+
+    document.getElementById("total").textContent =
+        (document.querySelectorAll("#t1 tbody tr").length + document.querySelectorAll("#t2 tbody tr").length).toString();
+
+    applyFilters();
+}
+
+function applyFilters(){
+    const q = (document.getElementById("q").value || "").trim().toLowerCase();
+    const cat = document.getElementById("cat").value;   // all / dunder / nond / tooling
+    const kind = document.getElementById("kind").value; // all / dunder / nond
+
+    const rows = document.querySelectorAll("#t1 tbody tr, #t2 tbody tr");
+    let shown = 0;
+
+    rows.forEach(tr => {
+        const hay = tr.getAttribute("data-hay") || "";
+        const rCat = tr.getAttribute("data-cat") || "all";
+        const rKind = tr.getAttribute("data-kind") || "all";
+
+        const okQ = !q || hay.includes(q);
+        const okCat = (cat === "all") || (rCat === cat);
+        const okKind = (kind === "all") || (rKind === kind);
+
+        const ok = okQ && okCat && okKind;
+        tr.style.display = ok ? "" : "none";
+        if (ok) shown++;
+    });
+
+    document.getElementById("shown").textContent = shown.toString();
+
+    const parts = [];
+    if(q) parts.push(`search="${q}"`);
+    if(cat !== "all") parts.push(`category="${cat}"`);
+    if(kind !== "all") parts.push(`type="${kind}"`);
+    document.getElementById("filterLabel").textContent = parts.length ? parts.join(" \u00b7 ") : "none";
+}
+
+function initTables(){
+    document.addEventListener("keydown", (e) => {
+        if (e.key === "/" && document.activeElement?.tagName !== "INPUT" && document.activeElement?.tagName !== "TEXTAREA") {
+            e.preventDefault();
+            document.getElementById("q").focus();
+        }
+    });
+
+    document.getElementById("q").addEventListener("input", applyFilters);
+    document.getElementById("cat").addEventListener("change", applyFilters);
+    document.getElementById("kind").addEventListener("change", applyFilters);
+
+    renderTables();
+}
+
+
+let lastRightCount = 0;
+let lastLeftCount = 0;
+let lastBottomCount = 0;
+let lastTopCount = 0;
+let replFloatState = null;
+let explorerFloatState = null;
+
+function clamp(v, lo, hi){
+    return Math.max(lo, Math.min(hi, v));
+}
+
+function captureFloatState(){
+    if(!repl) return;
+    const rect = repl.getBoundingClientRect();
+    replFloatState = {
+        left: rect.left,
+        top: rect.top,
+        width: rect.width,
+        height: rect.height
+    };
+}
+
+function applyFloatState(){
+    if(!repl) return;
+    if(replFloatState){
+        repl.style.left = replFloatState.left + "px";
+        repl.style.top = replFloatState.top + "px";
+        repl.style.width = replFloatState.width + "px";
+        repl.style.height = replFloatState.height + "px";
+        repl.style.right = "auto";
+        repl.style.bottom = "auto";
+    }else{
+        repl.style.left = "auto";
+        repl.style.top = "auto";
+        repl.style.right = "18px";
+        repl.style.bottom = "18px";
+        repl.style.width = "720px";
+        repl.style.height = "min(66vh, 560px)";
+    }
+}
+
+function captureExplorerFloatState(){
+    if(!explorerWindow) return;
+    const rect = explorerWindow.getBoundingClientRect();
+    explorerFloatState = {
+        left: rect.left,
+        top: rect.top,
+        width: rect.width,
+        height: rect.height
+    };
+}
+
+function applyExplorerFloatState(){
+    if(!explorerWindow) return;
+    if(explorerFloatState){
+        explorerWindow.style.left = explorerFloatState.left + "px";
+        explorerWindow.style.top = explorerFloatState.top + "px";
+        explorerWindow.style.width = explorerFloatState.width + "px";
+        explorerWindow.style.height = explorerFloatState.height + "px";
+        explorerWindow.style.right = "auto";
+        explorerWindow.style.bottom = "auto";
+    }else{
+        explorerWindow.style.left = "18px";
+        explorerWindow.style.bottom = "18px";
+        explorerWindow.style.right = "auto";
+        explorerWindow.style.top = "auto";
+        explorerWindow.style.width = "560px";
+        explorerWindow.style.height = "min(70vh, 600px)";
+    }
+}
+
+function updateExpandButtonText(){
+    if (explorerWindow && explorerWindow.classList.contains("explorerMini")) {
+        btnExpand.textContent = ">>";
+        btnExpand.title = "Expand to full view";
+    } else {
+        btnExpand.textContent = "<<";
+        btnExpand.title = "Minimize to compact view";
+    }
+    positionExpandButton();
+}
+
+function positionExpandButton(){
+    if (!btnExpand) return;
+    const explorerBodyEl = document.getElementById("replExplorerBody");
+    if (!explorerBodyEl) return;
+
+    const bodyRect = explorerBodyEl.getBoundingClientRect();
+    if (!bodyRect.height) return;
+
+    const offsetY = bodyRect.height / 2;
+    btnExpand.style.top = `${offsetY}px`;
+}
+
+function captureFloatStateFor(key){
+    if(key === "repl") captureFloatState();
+    if(key === "explorer") captureExplorerFloatState();
+}
+
+function applyFloatStateFor(key){
+    if(key === "repl") applyFloatState();
+    if(key === "explorer") applyExplorerFloatState();
+}
+
+function positionDockRight(key, top, height, width){
+    const el = key === "repl" ? repl : explorerWindow;
+    if(!el) return;
+    el.style.right = "0";
+    el.style.left = "auto";
+    el.style.top = top + "px";
+    el.style.bottom = "auto";
+    el.style.width = width + "px";
+    el.style.height = height + "px";
+}
+
+function positionDockLeft(key, top, height, width){
+    const el = key === "repl" ? repl : explorerWindow;
+    if(!el) return;
+    el.style.left = "0";
+    el.style.right = "auto";
+    el.style.top = top + "px";
+    el.style.bottom = "auto";
+    el.style.width = width + "px";
+    el.style.height = height + "px";
+}
+
+function positionDockBottom(key, left, width, height){
+    const el = key === "repl" ? repl : explorerWindow;
+    if(!el) return;
+    el.style.left = left + "px";
+    el.style.right = "auto";
+    el.style.bottom = "0";
+    el.style.top = "auto";
+    el.style.width = width + "px";
+    el.style.height = height + "px";
+}
+
+function positionDockTop(key, left, width, height){
+    const el = key === "repl" ? repl : explorerWindow;
+    if(!el) return;
+    el.style.left = left + "px";
+    el.style.right = "auto";
+    el.style.top = "0";
+    el.style.bottom = "auto";
+    el.style.width = width + "px";
+    el.style.height = height + "px";
+}
+
+function getDockAlt(pos){
+    switch(pos){
+        case "rt": return "rb";
+        case "rb": return "rt";
+        case "lt": return "lb";
+        case "lb": return "lt";
+        case "tl": return "tr";
+        case "tr": return "tl";
+        case "bl": return "br";
+        case "br": return "bl";
+        default: return null;
+    }
+}
+
+function applyDockLayout(){
+    const explorerVisible = explorerWindow && !explorerWindow.classList.contains("hidden");
+    const keys = ["repl","explorer"];
+    const rightKeys = keys.filter(k => dockState[k] && dockState[k].startsWith("r") && (k !== "explorer" || explorerVisible));
+    const leftKeys = keys.filter(k => dockState[k] && dockState[k].startsWith("l") && (k !== "explorer" || explorerVisible));
+    const bottomKeys = keys.filter(k => dockState[k] && dockState[k].startsWith("b") && (k !== "explorer" || explorerVisible));
+    const topKeys = keys.filter(k => dockState[k] && dockState[k].startsWith("t") && (k !== "explorer" || explorerVisible));
+
+    keys.forEach(k => {
+        const el = k === "repl" ? repl : explorerWindow;
+        if(!el) return;
+        const pos = dockState[k];
+        if(!pos){
+            el.classList.remove("docked","dock-right","dock-left","dock-bottom","dock-top");
+            applyFloatStateFor(k);
+            return;
+        }
+        el.classList.add("docked");
+        el.classList.toggle("dock-right", pos.startsWith("r"));
+        el.classList.toggle("dock-left", pos.startsWith("l"));
+        el.classList.toggle("dock-bottom", pos.startsWith("b"));
+        el.classList.toggle("dock-top", pos.startsWith("t"));
+        el.classList.remove("maximized");
+    });
+
+    if(rightKeys.length === 1 && lastRightCount === 0){
+        dockGroups.right.width = Math.round(window.innerWidth / 2);
+        dockGroups.right.split = 0.5;
+    }
+    if(leftKeys.length === 1 && lastLeftCount === 0){
+        dockGroups.left.width = Math.round(window.innerWidth / 2);
+        dockGroups.left.split = 0.5;
+    }
+    if(bottomKeys.length === 1 && lastBottomCount === 0){
+        dockGroups.bottom.height = Math.round(window.innerHeight / 2);
+        dockGroups.bottom.split = 0.5;
+    }
+    if(topKeys.length === 1 && lastTopCount === 0){
+        dockGroups.top.height = Math.round(window.innerHeight / 2);
+        dockGroups.top.split = 0.5;
+    }
+
+    if(rightKeys.length === 2 && lastRightCount !== 2){
+        dockGroups.right.split = 0.5;
+    }
+    if(leftKeys.length === 2 && lastLeftCount !== 2){
+        dockGroups.left.split = 0.5;
+    }
+    if(bottomKeys.length === 2 && lastBottomCount !== 2){
+        dockGroups.bottom.split = 0.5;
+    }
+    if(topKeys.length === 2 && lastTopCount !== 2){
+        dockGroups.top.split = 0.5;
+    }
+
+    if(rightKeys.length){
+        const fullKey = rightKeys.find(k => dockState[k] === "r");
+        if(!dockGroups.right.width){
+            dockGroups.right.width = Math.round(window.innerWidth / 2);
+        }
+        const minW = 360;
+        const maxW = window.innerWidth - 16;
+        const rightWidth = clamp(dockGroups.right.width || minW, minW, maxW);
+        dockGroups.right.width = rightWidth;
+
+        const totalH = window.innerHeight;
+        const minH = 220;
+        const minRatio = minH / totalH;
+
+        if(fullKey){
+            positionDockRight(fullKey, 0, totalH, rightWidth);
+            if(dockSplitRight) dockSplitRight.style.display = "none";
+        }else if(rightKeys.length === 2){
+            dockGroups.right.split = clamp(dockGroups.right.split, minRatio, 1 - minRatio);
+            const topH = Math.round(totalH * dockGroups.right.split);
+            const bottomH = totalH - topH;
+            const topKey = dockState.repl === "rt" ? "repl" : dockState.explorer === "rt" ? "explorer" : rightKeys[0];
+            const bottomKey = topKey === "repl" ? "explorer" : "repl";
+            positionDockRight(topKey, 0, topH, rightWidth);
+            positionDockRight(bottomKey, topH, bottomH, rightWidth);
+            if(dockSplitRight){
+                dockSplitRight.style.display = "block";
+                dockSplitRight.style.right = "0";
+                dockSplitRight.style.left = "auto";
+                dockSplitRight.style.top = (topH - 3) + "px";
+                dockSplitRight.style.width = rightWidth + "px";
+            }
+        }else{
+            const key = rightKeys[0];
+            const pos = dockState[key];
+            let split = dockGroups.right.split ?? 0.5;
+            if(pos === "rt"){
+                split = clamp(split, minRatio, 1);
+            }else if(pos === "rb"){
+                split = clamp(split, 0, 1 - minRatio);
+            }else{
+                split = clamp(split, minRatio, 1 - minRatio);
+            }
+            dockGroups.right.split = split;
+            const topH = Math.round(totalH * split);
+            const bottomH = totalH - topH;
+            if(pos === "rb"){
+                positionDockRight(key, topH, bottomH, rightWidth);
+            }else{
+                positionDockRight(key, 0, topH, rightWidth);
+            }
+            if(dockSplitRight){
+                dockSplitRight.style.display = "block";
+                dockSplitRight.style.right = "0";
+                dockSplitRight.style.left = "auto";
+                dockSplitRight.style.top = (topH - 3) + "px";
+                dockSplitRight.style.width = rightWidth + "px";
+            }
+        }
+    }else{
+        if(dockSplitRight) dockSplitRight.style.display = "none";
+    }
+
+    if(leftKeys.length){
+        const fullKey = leftKeys.find(k => dockState[k] === "l");
+        if(!dockGroups.left.width){
+            dockGroups.left.width = Math.round(window.innerWidth / 2);
+        }
+        const minW = 360;
+        const maxW = window.innerWidth - 16;
+        const leftWidth = clamp(dockGroups.left.width || minW, minW, maxW);
+        dockGroups.left.width = leftWidth;
+
+        const totalH = window.innerHeight;
+        const minH = 220;
+        const minRatio = minH / totalH;
+
+        if(fullKey){
+            positionDockLeft(fullKey, 0, totalH, leftWidth);
+            if(dockSplitLeft) dockSplitLeft.style.display = "none";
+        }else if(leftKeys.length === 2){
+            dockGroups.left.split = clamp(dockGroups.left.split, minRatio, 1 - minRatio);
+            const topH = Math.round(totalH * dockGroups.left.split);
+            const bottomH = totalH - topH;
+            const topKey = dockState.repl === "lt" ? "repl" : dockState.explorer === "lt" ? "explorer" : leftKeys[0];
+            const bottomKey = topKey === "repl" ? "explorer" : "repl";
+            positionDockLeft(topKey, 0, topH, leftWidth);
+            positionDockLeft(bottomKey, topH, bottomH, leftWidth);
+            if(dockSplitLeft){
+                dockSplitLeft.style.display = "block";
+                dockSplitLeft.style.left = "0";
+                dockSplitLeft.style.right = "auto";
+                dockSplitLeft.style.top = (topH - 3) + "px";
+                dockSplitLeft.style.width = leftWidth + "px";
+            }
+        }else{
+            const key = leftKeys[0];
+            const pos = dockState[key];
+            let split = dockGroups.left.split ?? 0.5;
+            if(pos === "lt"){
+                split = clamp(split, minRatio, 1);
+            }else if(pos === "lb"){
+                split = clamp(split, 0, 1 - minRatio);
+            }else{
+                split = clamp(split, minRatio, 1 - minRatio);
+            }
+            dockGroups.left.split = split;
+            const topH = Math.round(totalH * split);
+            const bottomH = totalH - topH;
+            if(pos === "lb"){
+                positionDockLeft(key, topH, bottomH, leftWidth);
+            }else{
+                positionDockLeft(key, 0, topH, leftWidth);
+            }
+            if(dockSplitLeft){
+                dockSplitLeft.style.display = "block";
+                dockSplitLeft.style.left = "0";
+                dockSplitLeft.style.right = "auto";
+                dockSplitLeft.style.top = (topH - 3) + "px";
+                dockSplitLeft.style.width = leftWidth + "px";
+            }
+        }
+    }else{
+        if(dockSplitLeft) dockSplitLeft.style.display = "none";
+    }
+
+    if(bottomKeys.length){
+        const fullKey = bottomKeys.find(k => dockState[k] === "b");
+        if(!dockGroups.bottom.height){
+            dockGroups.bottom.height = Math.round(window.innerHeight / 2);
+        }
+        const minH = 260;
+        const maxH = window.innerHeight - 16;
+        const bottomHeight = clamp(dockGroups.bottom.height || minH, minH, maxH);
+        dockGroups.bottom.height = bottomHeight;
+
+        const totalW = window.innerWidth;
+        const minW = 320;
+        const minRatio = minW / totalW;
+
+        if(fullKey){
+            positionDockBottom(fullKey, 0, totalW, bottomHeight);
+            if(dockSplitBottom) dockSplitBottom.style.display = "none";
+        }else if(bottomKeys.length === 2){
+            dockGroups.bottom.split = clamp(dockGroups.bottom.split, minRatio, 1 - minRatio);
+            const leftW = Math.round(totalW * dockGroups.bottom.split);
+            const rightW = totalW - leftW;
+            const leftKey = dockState.repl === "bl" ? "repl" : dockState.explorer === "bl" ? "explorer" : bottomKeys[0];
+            const rightKey = leftKey === "repl" ? "explorer" : "repl";
+            positionDockBottom(leftKey, 0, leftW, bottomHeight);
+            positionDockBottom(rightKey, leftW, rightW, bottomHeight);
+            if(dockSplitBottom){
+                dockSplitBottom.style.display = "block";
+                dockSplitBottom.style.bottom = "0";
+                dockSplitBottom.style.left = (leftW - 3) + "px";
+                dockSplitBottom.style.height = bottomHeight + "px";
+            }
+        }else{
+            const key = bottomKeys[0];
+            const pos = dockState[key];
+            let split = dockGroups.bottom.split ?? 0.5;
+            if(pos === "bl"){
+                split = clamp(split, minRatio, 1);
+            }else if(pos === "br"){
+                split = clamp(split, 0, 1 - minRatio);
+            }else{
+                split = clamp(split, minRatio, 1 - minRatio);
+            }
+            dockGroups.bottom.split = split;
+            const leftW = Math.round(totalW * split);
+            const rightW = totalW - leftW;
+            if(pos === "br"){
+                positionDockBottom(key, leftW, rightW, bottomHeight);
+            }else{
+                positionDockBottom(key, 0, leftW, bottomHeight);
+            }
+            if(dockSplitBottom){
+                dockSplitBottom.style.display = "block";
+                dockSplitBottom.style.bottom = "0";
+                dockSplitBottom.style.left = (leftW - 3) + "px";
+                dockSplitBottom.style.height = bottomHeight + "px";
+            }
+        }
+    }else{
+        if(dockSplitBottom) dockSplitBottom.style.display = "none";
+    }
+
+    if(topKeys.length){
+        const fullKey = topKeys.find(k => dockState[k] === "t");
+        if(!dockGroups.top.height){
+            dockGroups.top.height = Math.round(window.innerHeight / 2);
+        }
+        const minH = 260;
+        const maxH = window.innerHeight - 16;
+        const topHeight = clamp(dockGroups.top.height || minH, minH, maxH);
+        dockGroups.top.height = topHeight;
+
+        const totalW = window.innerWidth;
+        const minW = 320;
+        const minRatio = minW / totalW;
+
+        if(fullKey){
+            positionDockTop(fullKey, 0, totalW, topHeight);
+            if(dockSplitTop) dockSplitTop.style.display = "none";
+        }else if(topKeys.length === 2){
+            dockGroups.top.split = clamp(dockGroups.top.split, minRatio, 1 - minRatio);
+            const leftW = Math.round(totalW * dockGroups.top.split);
+            const rightW = totalW - leftW;
+            const leftKey = dockState.repl === "tl" ? "repl" : dockState.explorer === "tl" ? "explorer" : topKeys[0];
+            const rightKey = leftKey === "repl" ? "explorer" : "repl";
+            positionDockTop(leftKey, 0, leftW, topHeight);
+            positionDockTop(rightKey, leftW, rightW, topHeight);
+            if(dockSplitTop){
+                dockSplitTop.style.display = "block";
+                dockSplitTop.style.top = "0";
+                dockSplitTop.style.bottom = "auto";
+                dockSplitTop.style.left = (leftW - 3) + "px";
+                dockSplitTop.style.height = topHeight + "px";
+            }
+        }else{
+            const key = topKeys[0];
+            const pos = dockState[key];
+            let split = dockGroups.top.split ?? 0.5;
+            if(pos === "tl"){
+                split = clamp(split, minRatio, 1);
+            }else if(pos === "tr"){
+                split = clamp(split, 0, 1 - minRatio);
+            }else{
+                split = clamp(split, minRatio, 1 - minRatio);
+            }
+            dockGroups.top.split = split;
+            const leftW = Math.round(totalW * split);
+            const rightW = totalW - leftW;
+            if(pos === "tr"){
+                positionDockTop(key, leftW, rightW, topHeight);
+            }else{
+                positionDockTop(key, 0, leftW, topHeight);
+            }
+            if(dockSplitTop){
+                dockSplitTop.style.display = "block";
+                dockSplitTop.style.top = "0";
+                dockSplitTop.style.bottom = "auto";
+                dockSplitTop.style.left = (leftW - 3) + "px";
+                dockSplitTop.style.height = topHeight + "px";
+            }
+        }
+    }else{
+        if(dockSplitTop) dockSplitTop.style.display = "none";
+    }
+
+    lastRightCount = rightKeys.length;
+    lastLeftCount = leftKeys.length;
+    lastBottomCount = bottomKeys.length;
+    lastTopCount = topKeys.length;
+    positionExpandButton();
+}
+
+function setDockPosition(key, pos){
+    const otherKey = key === "repl" ? "explorer" : "repl";
+    if(!dockState[key]){
+        captureFloatStateFor(key);
+    }
+    if(dockState[otherKey]){
+        const otherPos = dockState[otherKey];
+        if(otherPos === pos){
+            dockState[otherKey] = getDockAlt(pos);
+        }else if(otherPos && otherPos[0] === pos[0]){
+            if(pos.length === 1 || otherPos.length === 1){
+                dockState[otherKey] = null;
+            }
+        }
+    }
+    dockState[key] = pos;
+    applyDockLayout();
+}
+
+function clearDockPosition(key){
+    dockState[key] = null;
+    applyDockLayout();
+}
+
+function initWindowing(){
+    if(!repl) return;
+
+    const headerEl = document.getElementById("replHeader");
+    let dragging = false;
+    let startX=0, startY=0, startLeft=0, startTop=0;
+    let resizing = false;
+    let resizeDir = "";
+    let resizeStartX = 0;
+    let resizeStartY = 0;
+    let resizeStartW = 0;
+    let resizeStartH = 0;
+    let resizeStartLeft = 0;
+    let resizeStartTop = 0;
+
+    headerEl.addEventListener("pointerdown", (e) => {
+        if (e.target && e.target.closest && e.target.closest("button")) return;
+        if (repl.classList.contains("dock-right") || repl.classList.contains("dock-left") || repl.classList.contains("dock-bottom") || repl.classList.contains("dock-top")) return;
+        dragging = true;
+        headerEl.setPointerCapture(e.pointerId);
+        const rect = repl.getBoundingClientRect();
+        startX = e.clientX;
+        startY = e.clientY;
+        startLeft = rect.left;
+        startTop = rect.top;
+
+        repl.style.right = "auto";
+        repl.style.bottom = "auto";
+        repl.style.left = rect.left + "px";
+        repl.style.top = rect.top + "px";
+    });
+
+    headerEl.addEventListener("pointermove", (e) => {
+        if(!dragging) return;
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+
+        const w = repl.getBoundingClientRect().width;
+        const h = repl.getBoundingClientRect().height;
+
+        const newLeft = clamp(startLeft + dx, 8, window.innerWidth - w - 8);
+        const newTop  = clamp(startTop  + dy, 8, window.innerHeight - h - 8);
+
+        repl.style.left = newLeft + "px";
+        repl.style.top  = newTop + "px";
+    });
+
+    headerEl.addEventListener("pointerup", () => { dragging = false; });
+    headerEl.addEventListener("pointercancel", () => { dragging = false; });
+
+    if (dockRTBtn) {
+        dockRTBtn.addEventListener("click", () => setDockPosition("repl","rt"));
+    }
+    if (dockRBBtn) {
+        dockRBBtn.addEventListener("click", () => setDockPosition("repl","rb"));
+    }
+    if (dockLeftBtn) {
+        dockLeftBtn.addEventListener("click", () => setDockPosition("repl","l"));
+    }
+    if (dockRightBtn) {
+        dockRightBtn.addEventListener("click", () => setDockPosition("repl","r"));
+    }
+    if (dockTopBtn) {
+        dockTopBtn.addEventListener("click", () => setDockPosition("repl","t"));
+    }
+    if (dockBottomBtn) {
+        dockBottomBtn.addEventListener("click", () => setDockPosition("repl","b"));
+    }
+    if (dockLTBtn) {
+        dockLTBtn.addEventListener("click", () => setDockPosition("repl","lt"));
+    }
+    if (dockLBBtn) {
+        dockLBBtn.addEventListener("click", () => setDockPosition("repl","lb"));
+    }
+    if (dockTLBtn) {
+        dockTLBtn.addEventListener("click", () => setDockPosition("repl","tl"));
+    }
+    if (dockTRBtn) {
+        dockTRBtn.addEventListener("click", () => setDockPosition("repl","tr"));
+    }
+    if (dockBLBtn) {
+        dockBLBtn.addEventListener("click", () => setDockPosition("repl","bl"));
+    }
+    if (dockBRBtn) {
+        dockBRBtn.addEventListener("click", () => setDockPosition("repl","br"));
+    }
+    if (dockFloatBtn) {
+        dockFloatBtn.addEventListener("click", () => clearDockPosition("repl"));
+    }
+
+    const resizers = repl.querySelectorAll(".repl-resizer");
+    resizers.forEach((handle) => {
+        handle.addEventListener("pointerdown", (e) => {
+            if (e.button !== 0) return;
+            e.preventDefault();
+            e.stopPropagation();
+            resizing = true;
+            resizeDir = handle.dataset.dir || "";
+            handle.setPointerCapture(e.pointerId);
+
+            const rect = repl.getBoundingClientRect();
+            resizeStartX = e.clientX;
+            resizeStartY = e.clientY;
+            resizeStartW = rect.width;
+            resizeStartH = rect.height;
+            resizeStartLeft = rect.left;
+            resizeStartTop = rect.top;
+
+            if (!repl.classList.contains("dock-right") && !repl.classList.contains("dock-bottom")) {
+                repl.style.right = "auto";
+                repl.style.bottom = "auto";
+                repl.style.left = rect.left + "px";
+                repl.style.top = rect.top + "px";
+            }
+        });
+    });
+
+    document.addEventListener("pointermove", (e) => {
+        if (!resizing) return;
+        const dx = e.clientX - resizeStartX;
+        const dy = e.clientY - resizeStartY;
+
+        const minW = 360;
+        const minH = 240;
+        const maxW = window.innerWidth - 16;
+        const maxH = window.innerHeight - 16;
+
+        const rightSplit = dockState.repl && dockState.explorer && dockState.repl.startsWith("r") && dockState.explorer.startsWith("r");
+        const leftSplit = dockState.repl && dockState.explorer && dockState.repl.startsWith("l") && dockState.explorer.startsWith("l");
+        const bottomSplit = dockState.repl && dockState.explorer && dockState.repl.startsWith("b") && dockState.explorer.startsWith("b");
+        const topSplit = dockState.repl && dockState.explorer && dockState.repl.startsWith("t") && dockState.explorer.startsWith("t");
+
+        if (repl.classList.contains("dock-right")) {
+            if (rightSplit) return;
+            if (resizeDir !== "w") return;
+            const newW = clamp(resizeStartW - dx, minW, maxW);
+            dockGroups.right.width = newW;
+            applyDockLayout();
+            return;
+        }
+        if (repl.classList.contains("dock-left")) {
+            if (leftSplit) return;
+            if (resizeDir !== "e") return;
+            const newW = clamp(resizeStartW + dx, minW, maxW);
+            dockGroups.left.width = newW;
+            applyDockLayout();
+            return;
+        }
+        if (repl.classList.contains("dock-bottom")) {
+            if (bottomSplit) return;
+            if (resizeDir !== "n") return;
+            const newH = clamp(resizeStartH - dy, minH, maxH);
+            dockGroups.bottom.height = newH;
+            applyDockLayout();
+            return;
+        }
+        if (repl.classList.contains("dock-top")) {
+            if (topSplit) return;
+            if (resizeDir !== "s") return;
+            const newH = clamp(resizeStartH + dy, minH, maxH);
+            dockGroups.top.height = newH;
+            applyDockLayout();
+            return;
+        }
+
+        let newW = resizeStartW;
+        let newH = resizeStartH;
+        let newLeft = resizeStartLeft;
+        let newTop = resizeStartTop;
+
+        if (resizeDir.includes("e")) newW = clamp(resizeStartW + dx, minW, maxW);
+        if (resizeDir.includes("s")) newH = clamp(resizeStartH + dy, minH, maxH);
+        if (resizeDir.includes("w")) {
+            newW = clamp(resizeStartW - dx, minW, maxW);
+            newLeft = resizeStartLeft + dx;
+        }
+        if (resizeDir.includes("n")) {
+            newH = clamp(resizeStartH - dy, minH, maxH);
+            newTop = resizeStartTop + dy;
+        }
+
+        newLeft = clamp(newLeft, 0, window.innerWidth - newW);
+        newTop = clamp(newTop, 0, window.innerHeight - newH);
+
+        repl.style.width = newW + "px";
+        repl.style.height = newH + "px";
+        repl.style.left = newLeft + "px";
+        repl.style.top = newTop + "px";
+        positionExpandButton();
+    });
+
+    document.addEventListener("pointerup", () => { resizing = false; });
+
+    // Splitter drag for docked pairs
+    let splitDragging = null;
+    if (dockSplitRight) {
+        dockSplitRight.addEventListener("pointerdown", (e) => {
+            e.preventDefault();
+            splitDragging = "right";
+            dockSplitRight.setPointerCapture(e.pointerId);
+        });
+    }
+    if (dockSplitLeft) {
+        dockSplitLeft.addEventListener("pointerdown", (e) => {
+            e.preventDefault();
+            splitDragging = "left";
+            dockSplitLeft.setPointerCapture(e.pointerId);
+        });
+    }
+    if (dockSplitBottom) {
+        dockSplitBottom.addEventListener("pointerdown", (e) => {
+            e.preventDefault();
+            splitDragging = "bottom";
+            dockSplitBottom.setPointerCapture(e.pointerId);
+        });
+    }
+    if (dockSplitTop) {
+        dockSplitTop.addEventListener("pointerdown", (e) => {
+            e.preventDefault();
+            splitDragging = "top";
+            dockSplitTop.setPointerCapture(e.pointerId);
+        });
+    }
+
+    document.addEventListener("pointermove", (e) => {
+        if (!splitDragging) return;
+        const explorerVisible = explorerWindow && !explorerWindow.classList.contains("hidden");
+        const rightKeys = ["repl","explorer"].filter(k => dockState[k] && dockState[k].startsWith("r") && (k !== "explorer" || explorerVisible));
+        const leftKeys = ["repl","explorer"].filter(k => dockState[k] && dockState[k].startsWith("l") && (k !== "explorer" || explorerVisible));
+        const bottomKeys = ["repl","explorer"].filter(k => dockState[k] && dockState[k].startsWith("b") && (k !== "explorer" || explorerVisible));
+        const topKeys = ["repl","explorer"].filter(k => dockState[k] && dockState[k].startsWith("t") && (k !== "explorer" || explorerVisible));
+        const hasRightSplit = rightKeys.length === 2;
+        const hasRightSingle = rightKeys.length === 1;
+        const hasLeftSplit = leftKeys.length === 2;
+        const hasLeftSingle = leftKeys.length === 1;
+        const hasBottomSplit = bottomKeys.length === 2;
+        const hasBottomSingle = bottomKeys.length === 1;
+        const hasTopSplit = topKeys.length === 2;
+        const hasTopSingle = topKeys.length === 1;
+
+        if (splitDragging === "right") {
+            if (hasRightSplit || hasRightSingle) {
+                const totalH = window.innerHeight;
+                const minH = 220;
+                const minRatio = minH / totalH;
+                let nextSplit = clamp(e.clientY / totalH, 0, 1);
+
+                if (hasRightSplit) {
+                    nextSplit = clamp(nextSplit, minRatio, 1 - minRatio);
+                } else if (hasRightSingle) {
+                    const key = rightKeys[0];
+                    const pos = dockState[key];
+                    if (pos === "rt") {
+                        nextSplit = clamp(nextSplit, minRatio, 1);
+                    } else if (pos === "rb") {
+                        nextSplit = clamp(nextSplit, 0, 1 - minRatio);
+                    } else {
+                        nextSplit = clamp(nextSplit, minRatio, 1 - minRatio);
+                    }
+                }
+
+                dockGroups.right.split = nextSplit;
+                applyDockLayout();
+                return;
+            }
+        }
+        if (splitDragging === "left") {
+            if (hasLeftSplit || hasLeftSingle) {
+                const totalH = window.innerHeight;
+                const minH = 220;
+                const minRatio = minH / totalH;
+                let nextSplit = clamp(e.clientY / totalH, 0, 1);
+
+                if (hasLeftSplit) {
+                    nextSplit = clamp(nextSplit, minRatio, 1 - minRatio);
+                } else if (hasLeftSingle) {
+                    const key = leftKeys[0];
+                    const pos = dockState[key];
+                    if (pos === "lt") {
+                        nextSplit = clamp(nextSplit, minRatio, 1);
+                    } else if (pos === "lb") {
+                        nextSplit = clamp(nextSplit, 0, 1 - minRatio);
+                    } else {
+                        nextSplit = clamp(nextSplit, minRatio, 1 - minRatio);
+                    }
+                }
+
+                dockGroups.left.split = nextSplit;
+                applyDockLayout();
+                return;
+            }
+        }
+        if (splitDragging === "bottom") {
+            if (hasBottomSplit || hasBottomSingle) {
+                const totalW = window.innerWidth;
+                const minW = 320;
+                const minRatio = minW / totalW;
+                let nextSplit = clamp(e.clientX / totalW, 0, 1);
+
+                if (hasBottomSplit) {
+                    nextSplit = clamp(nextSplit, minRatio, 1 - minRatio);
+                } else if (hasBottomSingle) {
+                    const key = bottomKeys[0];
+                    const pos = dockState[key];
+                    if (pos === "bl") {
+                        nextSplit = clamp(nextSplit, minRatio, 1);
+                    } else if (pos === "br") {
+                        nextSplit = clamp(nextSplit, 0, 1 - minRatio);
+                    } else {
+                        nextSplit = clamp(nextSplit, minRatio, 1 - minRatio);
+                    }
+                }
+
+                dockGroups.bottom.split = nextSplit;
+                applyDockLayout();
+                return;
+            }
+        }
+        if (splitDragging === "top") {
+            if (hasTopSplit || hasTopSingle) {
+                const totalW = window.innerWidth;
+                const minW = 320;
+                const minRatio = minW / totalW;
+                let nextSplit = clamp(e.clientX / totalW, 0, 1);
+
+                if (hasTopSplit) {
+                    nextSplit = clamp(nextSplit, minRatio, 1 - minRatio);
+                } else if (hasTopSingle) {
+                    const key = topKeys[0];
+                    const pos = dockState[key];
+                    if (pos === "tl") {
+                        nextSplit = clamp(nextSplit, minRatio, 1);
+                    } else if (pos === "tr") {
+                        nextSplit = clamp(nextSplit, 0, 1 - minRatio);
+                    } else {
+                        nextSplit = clamp(nextSplit, minRatio, 1 - minRatio);
+                    }
+                }
+
+                dockGroups.top.split = nextSplit;
+                applyDockLayout();
+                return;
+            }
+        }
+    });
+
+    document.addEventListener("pointerup", () => { splitDragging = null; });
+
+    // Explorer window handlers
+    if (explorerWindow && explorerHeader) {
+        let expDragging = false;
+        let expResizing = false;
+        let expResizeDir = "";
+        let expStartX = 0;
+        let expStartY = 0;
+        let expStartW = 0;
+        let expStartH = 0;
+        let expStartLeft = 0;
+        let expStartTop = 0;
+
+        function toggleExplorerMinimize(){
+            if(!explorerWindow) return;
+            explorerWindow.classList.toggle("minimized");
+            positionExpandButton();
+        }
+
+        function toggleExplorerMaximize(){
+            if(!explorerWindow) return;
+            if(explorerWindow.classList.contains("maximized")){
+                explorerWindow.classList.remove("maximized");
+                applyExplorerFloatState();
+            }else{
+                captureExplorerFloatState();
+                dockState.explorer = null;
+                explorerWindow.classList.remove("dock-right","dock-bottom","docked");
+                explorerWindow.classList.add("maximized");
+                explorerWindow.style.left = "0";
+                explorerWindow.style.top = "0";
+                explorerWindow.style.right = "0";
+                explorerWindow.style.bottom = "0";
+                explorerWindow.style.width = "100%";
+                explorerWindow.style.height = "100vh";
+            }
+            positionExpandButton();
+        }
+
+        explorerHeader.addEventListener("pointerdown", (e) => {
+            if (e.target && e.target.closest && e.target.closest("button")) return;
+            if (explorerWindow.classList.contains("dock-right") || explorerWindow.classList.contains("dock-left") || explorerWindow.classList.contains("dock-bottom") || explorerWindow.classList.contains("dock-top")) return;
+            if (explorerWindow.classList.contains("maximized")) return;
+            expDragging = true;
+            explorerHeader.setPointerCapture(e.pointerId);
+            const rect = explorerWindow.getBoundingClientRect();
+            expStartX = e.clientX;
+            expStartY = e.clientY;
+            expStartLeft = rect.left;
+            expStartTop = rect.top;
+
+            explorerWindow.style.right = "auto";
+            explorerWindow.style.bottom = "auto";
+            explorerWindow.style.left = rect.left + "px";
+            explorerWindow.style.top = rect.top + "px";
+        });
+
+        explorerHeader.addEventListener("pointermove", (e) => {
+            if(!expDragging) return;
+            const dx = e.clientX - expStartX;
+            const dy = e.clientY - expStartY;
+
+            const w = explorerWindow.getBoundingClientRect().width;
+            const h = explorerWindow.getBoundingClientRect().height;
+
+            const newLeft = clamp(expStartLeft + dx, 8, window.innerWidth - w - 8);
+            const newTop  = clamp(expStartTop  + dy, 8, window.innerHeight - h - 8);
+
+            explorerWindow.style.left = newLeft + "px";
+            explorerWindow.style.top  = newTop + "px";
+        });
+
+        explorerHeader.addEventListener("pointerup", () => { expDragging = false; });
+        explorerHeader.addEventListener("pointercancel", () => { expDragging = false; });
+
+        if (explorerDockRTBtn) {
+            explorerDockRTBtn.addEventListener("click", () => setDockPosition("explorer","rt"));
+        }
+        if (explorerDockRBBtn) {
+            explorerDockRBBtn.addEventListener("click", () => setDockPosition("explorer","rb"));
+        }
+        if (explorerDockLeftBtn) {
+            explorerDockLeftBtn.addEventListener("click", () => setDockPosition("explorer","l"));
+        }
+        if (explorerDockRightBtn) {
+            explorerDockRightBtn.addEventListener("click", () => setDockPosition("explorer","r"));
+        }
+        if (explorerDockTopBtn) {
+            explorerDockTopBtn.addEventListener("click", () => setDockPosition("explorer","t"));
+        }
+        if (explorerDockBottomBtn) {
+            explorerDockBottomBtn.addEventListener("click", () => setDockPosition("explorer","b"));
+        }
+        if (explorerDockLTBtn) {
+            explorerDockLTBtn.addEventListener("click", () => setDockPosition("explorer","lt"));
+        }
+        if (explorerDockLBBtn) {
+            explorerDockLBBtn.addEventListener("click", () => setDockPosition("explorer","lb"));
+        }
+        if (explorerDockTLBtn) {
+            explorerDockTLBtn.addEventListener("click", () => setDockPosition("explorer","tl"));
+        }
+        if (explorerDockTRBtn) {
+            explorerDockTRBtn.addEventListener("click", () => setDockPosition("explorer","tr"));
+        }
+        if (explorerDockBLBtn) {
+            explorerDockBLBtn.addEventListener("click", () => setDockPosition("explorer","bl"));
+        }
+        if (explorerDockBRBtn) {
+            explorerDockBRBtn.addEventListener("click", () => setDockPosition("explorer","br"));
+        }
+        if (explorerDockFloatBtn) {
+            explorerDockFloatBtn.addEventListener("click", () => clearDockPosition("explorer"));
+        }
+        if (explorerMinBtn) {
+            explorerMinBtn.addEventListener("click", () => toggleExplorerMinimize());
+        }
+        if (explorerMaxBtn) {
+            explorerMaxBtn.addEventListener("click", () => toggleExplorerMaximize());
+        }
+        if (explorerCloseBtn) {
+            explorerCloseBtn.addEventListener("click", () => {
+                dockState.explorer = null;
+                explorerWindow.classList.add("hidden");
+                applyDockLayout();
+            });
+        }
+
+        const explorerResizers = explorerWindow.querySelectorAll(".repl-resizer");
+        explorerResizers.forEach((handle) => {
+            handle.addEventListener("pointerdown", (e) => {
+                if (e.button !== 0) return;
+                if (explorerWindow.classList.contains("maximized")) return;
+                e.preventDefault();
+                e.stopPropagation();
+                expResizing = true;
+                expResizeDir = handle.dataset.dir || "";
+                handle.setPointerCapture(e.pointerId);
+
+                const rect = explorerWindow.getBoundingClientRect();
+                expStartX = e.clientX;
+                expStartY = e.clientY;
+                expStartW = rect.width;
+                expStartH = rect.height;
+                expStartLeft = rect.left;
+                expStartTop = rect.top;
+
+                if (!explorerWindow.classList.contains("dock-right") && !explorerWindow.classList.contains("dock-bottom")) {
+                    explorerWindow.style.right = "auto";
+                    explorerWindow.style.bottom = "auto";
+                    explorerWindow.style.left = rect.left + "px";
+                    explorerWindow.style.top = rect.top + "px";
+                }
+            });
+        });
+
+        document.addEventListener("pointermove", (e) => {
+            if (!expResizing) return;
+            const dx = e.clientX - expStartX;
+            const dy = e.clientY - expStartY;
+
+            const minW = 360;
+            const minH = 260;
+            const maxW = window.innerWidth - 16;
+            const maxH = window.innerHeight - 16;
+
+            const rightSplit = dockState.repl && dockState.explorer && dockState.repl.startsWith("r") && dockState.explorer.startsWith("r");
+            const leftSplit = dockState.repl && dockState.explorer && dockState.repl.startsWith("l") && dockState.explorer.startsWith("l");
+            const bottomSplit = dockState.repl && dockState.explorer && dockState.repl.startsWith("b") && dockState.explorer.startsWith("b");
+            const topSplit = dockState.repl && dockState.explorer && dockState.repl.startsWith("t") && dockState.explorer.startsWith("t");
+
+            if (explorerWindow.classList.contains("dock-right")) {
+                if (rightSplit) return;
+                if (expResizeDir !== "w") return;
+                const newW = clamp(expStartW - dx, minW, maxW);
+                dockGroups.right.width = newW;
+                applyDockLayout();
+                return;
+            }
+            if (explorerWindow.classList.contains("dock-left")) {
+                if (leftSplit) return;
+                if (expResizeDir !== "e") return;
+                const newW = clamp(expStartW + dx, minW, maxW);
+                dockGroups.left.width = newW;
+                applyDockLayout();
+                return;
+            }
+            if (explorerWindow.classList.contains("dock-bottom")) {
+                if (bottomSplit) return;
+                if (expResizeDir !== "n") return;
+                const newH = clamp(expStartH - dy, minH, maxH);
+                dockGroups.bottom.height = newH;
+                applyDockLayout();
+                return;
+            }
+            if (explorerWindow.classList.contains("dock-top")) {
+                if (topSplit) return;
+                if (expResizeDir !== "s") return;
+                const newH = clamp(expStartH + dy, minH, maxH);
+                dockGroups.top.height = newH;
+                applyDockLayout();
+                return;
+            }
+
+            let newW = expStartW;
+            let newH = expStartH;
+            let newLeft = expStartLeft;
+            let newTop = expStartTop;
+
+            if (expResizeDir.includes("e")) newW = clamp(expStartW + dx, minW, maxW);
+            if (expResizeDir.includes("s")) newH = clamp(expStartH + dy, minH, maxH);
+            if (expResizeDir.includes("w")) {
+                newW = clamp(expStartW - dx, minW, maxW);
+                newLeft = expStartLeft + dx;
+            }
+            if (expResizeDir.includes("n")) {
+                newH = clamp(expStartH - dy, minH, maxH);
+                newTop = expStartTop + dy;
+            }
+
+            newLeft = clamp(newLeft, 0, window.innerWidth - newW);
+            newTop = clamp(newTop, 0, window.innerHeight - newH);
+
+            explorerWindow.style.width = newW + "px";
+            explorerWindow.style.height = newH + "px";
+            explorerWindow.style.left = newLeft + "px";
+            explorerWindow.style.top = newTop + "px";
+            positionExpandButton();
+        });
+
+        document.addEventListener("pointerup", () => { expResizing = false; });
+    }
+
+    window.addEventListener("resize", () => {
+        applyDockLayout();
+    });
+
+    applyDockLayout();
+}
+
+// -------------------------------------------------------------
+// Floating REPL + File Explorer (Pyodide)
+// -------------------------------------------------------------
+function initRepl(){
+    if(!repl) return;
+
+    const openExplorer = () => {
+        if (!explorerWindow) return;
+        explorerWindow.classList.remove("hidden");
+        explorerWindow.classList.remove("minimized");
+        if (typeof applyDockLayout === "function") applyDockLayout();
+        if (typeof positionExpandButton === "function") positionExpandButton();
+    };
+
+    const closeExplorer = () => {
+        if (!explorerWindow) return;
+        explorerWindow.classList.add("hidden");
+        if (typeof applyDockLayout === "function") applyDockLayout();
+    };
+
+    if (explorerToggleBtn) {
+        explorerToggleBtn.addEventListener("click", () => {
+            if (!explorerWindow) return;
+            if (explorerWindow.classList.contains("hidden")) {
+                openExplorer();
+            } else {
+                closeExplorer();
+            }
+        });
+        explorerToggleBtn.textContent = "Files";
+    }
+
+    if (collapseBtn) {
+        collapseBtn.textContent = repl.classList.contains("collapsed") ? "+" : "-";
+        collapseBtn.addEventListener("click", () => {
+            repl.classList.toggle("collapsed");
+            collapseBtn.textContent = repl.classList.contains("collapsed") ? "+" : "-";
+        });
+    }
+
+    function appendOut(txt){
+        if(!out) return;
+        const s = (txt ?? "").toString();
+        out.textContent = (out.textContent === "Output will appear here..." ? "" : out.textContent) + s;
+        if(!s.endsWith("\n")) out.textContent += "\n";
+        out.scrollTop = out.scrollHeight;
+    }
+
+    let pyodide = null;
+
+    // -------------------------------------------------------------
+    // Filesystem: /tmp (RAM) + /persist (IndexedDB)
+    // -------------------------------------------------------------
+    async function setupFilesystems(pyodideInstance){
+        const FS = pyodideInstance.FS;
+
+        try { FS.mkdir("/tmp"); } catch(e) {}
+        try { FS.mkdir("/persist"); } catch(e) {}
+
+        const persistInfo = FS.analyzePath("/persist");
+        const isMounted = persistInfo?.object?.mount && persistInfo.object.mount.type === "IDBFS";
+
+        if(!isMounted){
+            FS.mount(FS.filesystems.IDBFS, {}, "/persist");
+            try { FS.mkdir("/persist/Documents"); } catch(_) {}
+        }
+
+        await new Promise((resolve, reject) => {
+            FS.syncfs(true, (err) => err ? reject(err) : resolve());
+        });
+
+        pyodideInstance._persistFlush = async () => {
+            await new Promise((resolve, reject) => {
+                FS.syncfs(false, (err) => err ? reject(err) : resolve());
+            });
+            return true;
+        };
+
+        pyodideInstance._persistReload = async () => {
+            await new Promise((resolve, reject) => {
+                FS.syncfs(true, (err) => err ? reject(err) : resolve());
+            });
+            return true;
+        };
+
+        pyodideInstance._persistWipe = async () => {
+            function rmrf(path){
+                const st = FS.stat(path);
+                const isDir = FS.isDir(st.mode);
+                if(!isDir){
+                    FS.unlink(path);
+                    return;
+                }
+                const entries = FS.readdir(path).filter(n => n !== "." && n !== "..");
+                for(const name of entries){
+                    rmrf(path + "/" + name);
+                }
+            }
+            rmrf("/persist");
+            await pyodideInstance._persistFlush();
+            return true;
+        };
+
+        await pyodideInstance.runPythonAsync(`
+import os, pathlib
+
+PERSIST_DIR = "/persist"
+TMP_DIR = "/tmp"
+
+def ls(path="."):
+    return sorted(os.listdir(path))
+
+def write_text(path, text):
+    p = pathlib.Path(path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(text, encoding="utf-8")
+
+def read_text(path):
+    return pathlib.Path(path).read_text(encoding="utf-8")
+
+def mkdirp(path):
+    pathlib.Path(path).mkdir(parents=True, exist_ok=True)
+
+async def persist_sync():
+    import js
+    return await js.pyodide._persistFlush()
+
+async def persist_reload():
+    import js
+    return await js.pyodide._persistReload()
+
+async def persist_wipe():
+    import js
+    return await js.pyodide._persistWipe()
+
+print("Filesystem ready:")
+print("  /tmp     (RAM, clears on refresh)")
+print("  /persist (IndexedDB, persistent)")
+print("Tip: after writing to /persist, run: await persist_sync()")
+`);
+    }
+
+    // -------------------------------------------------------------
+    // Win11-ish Explorer logic (Pyodide FS)
+    // -------------------------------------------------------------
+    const explorer = {
+        root: "/persist",
+        cwd: "/persist",
+        selected: null,
+        dirty: false,
+    };
+
+    function setNavActive(which){
+        if(which === "persist"){
+            navPersist?.classList.add("active");
+            navTmp?.classList.remove("active");
+        }else{
+            navTmp?.classList.add("active");
+            navPersist?.classList.remove("active");
+        }
+    }
+
+    function joinPath(a,b){
+        if(a.endsWith("/")) a = a.slice(0,-1);
+        if(b.startsWith("/")) b = b.slice(1);
+        return a + "/" + b;
+    }
+
+    function dirname(p){
+        if(p === "/" ) return "/";
+        const i = p.lastIndexOf("/");
+        if(i <= 0) return "/";
+        return p.slice(0, i);
+    }
+
+    function basename(p){
+        const i = p.lastIndexOf("/");
+        return i >= 0 ? p.slice(i+1) : p;
+    }
+
+    function markDirty(v){
+        explorer.dirty = v;
+        if (!elDirty) return;
+        elDirty.textContent = v ? "\u25CF unsaved" : "";
+        elDirty.style.color = v ? "rgba(251,191,36,.95)" : "";
+    }
+
+    async function ensureReady(){
+        if(!pyodide){
+            appendOut("Pyodide not ready yet...");
+            return false;
+        }
+        return true;
+    }
+
+    function fs(){
+        return pyodide.FS;
+    }
+
+    function isDir(path){
+        try{
+            const st = fs().stat(path);
+            return fs().isDir(st.mode);
+        }catch(_){
+            return false;
+        }
+    }
+
+    function isFile(path){
+        try{
+            const st = fs().stat(path);
+            return fs().isFile(st.mode);
+        }catch(_){
+            return false;
+        }
+    }
+
+    function listDir(path){
+        const FS = fs();
+        let names = [];
+        try{
+            names = FS.readdir(path).filter(n => n !== "." && n !== "..");
+        }catch(_){
+            return [];
+        }
+        const rows = names.map(name => {
+            const full = joinPath(path, name);
+            let kind = "file";
+            try{
+                const st = FS.stat(full);
+                if(FS.isDir(st.mode)) kind = "dir";
+            }catch(_){ }
+            return { name, full, kind };
+        });
+
+        rows.sort((a,b) => {
+            if(a.kind !== b.kind) return a.kind === "dir" ? -1 : 1;
+            return a.name.localeCompare(b.name);
+        });
+        return rows;
+    }
+
+    async function refreshList(){
+        if(!(await ensureReady())) return;
+        if (elPath) elPath.textContent = explorer.cwd;
+        const rows = listDir(explorer.cwd);
+
+        if (!elList) return;
+        elList.innerHTML = rows.map(r => {
+            const icon = r.kind === "dir" ? "\uD83D\uDCC1" : "\uD83D\uDCC4";
+            const active = (explorer.selected === r.full) ? "active" : "";
+            return `
+      <div class="fileRow ${active}" data-full="${r.full}" data-kind="${r.kind}">
+        <div class="fileName">
+          <span>${icon}</span>
+          <span title="${r.name}">${r.name}</span>
+        </div>
+        <div class="fileMeta">${r.kind}</div>
+      </div>
+    `;
+        }).join("");
+
+        [...elList.querySelectorAll(".fileRow")].forEach(row => {
+            row.addEventListener("click", async () => {
+                const full = row.getAttribute("data-full");
+                const kind = row.getAttribute("data-kind");
+
+                if(kind === "dir"){
+                    if(explorer.dirty){
+                        const ok = confirm("You have unsaved changes. Continue without saving?");
+                        if(!ok) return;
+                    }
+                    explorer.cwd = full;
+                    explorer.selected = null;
+                    if (elEditor) elEditor.value = "";
+                    if (elEditorName) elEditorName.textContent = "No file selected";
+                    if (elEditorHint) elEditorHint.textContent = "Folder opened";
+                    markDirty(false);
+                    await refreshList();
+                    return;
+                }
+
+                if(explorer.dirty){
+                    const ok = confirm("You have unsaved changes. Continue without saving?");
+                    if(!ok) return;
+                }
+
+                explorer.selected = full;
+                markDirty(false);
+                try{
+                    const bytes = fs().readFile(full);
+                    if (elEditor) elEditor.value = new TextDecoder("utf-8").decode(bytes);
+                    if (elEditorName) elEditorName.textContent = basename(full);
+                    if (elEditorHint) elEditorHint.textContent = full;
+                }catch(e){
+                    appendOut("[explorer] failed to read file:\n" + e);
+                }
+                await refreshList();
+            });
+        });
+    }
+
+    if (elEditor) {
+        elEditor.addEventListener("input", () => {
+            if(explorer.selected) markDirty(true);
+        });
+    }
+
+    navPersist?.addEventListener("click", async () => {
+        if(explorer.dirty){
+            const ok = confirm("Unsaved changes. Switch anyway?");
+            if(!ok) return;
+        }
+        explorer.root = "/persist";
+        explorer.cwd = "/persist";
+        explorer.selected = null;
+        if (elEditor) elEditor.value = "";
+        if (elEditorName) elEditorName.textContent = "No file selected";
+        if (elEditorHint) elEditorHint.textContent = "Click a file to edit";
+        markDirty(false);
+        setNavActive("persist");
+        await refreshList();
+    });
+
+    navTmp?.addEventListener("click", async () => {
+        if(explorer.dirty){
+            const ok = confirm("Unsaved changes. Switch anyway?");
+            if(!ok) return;
+        }
+        explorer.root = "/tmp";
+        explorer.cwd = "/tmp";
+        explorer.selected = null;
+        if (elEditor) elEditor.value = "";
+        if (elEditorName) elEditorName.textContent = "No file selected";
+        if (elEditorHint) elEditorHint.textContent = "Click a file to edit";
+        markDirty(false);
+        setNavActive("tmp");
+        await refreshList();
+    });
+
+    btnUp?.addEventListener("click", async () => {
+        if(!(await ensureReady())) return;
+        if(explorer.cwd === explorer.root) return;
+        if(explorer.dirty){
+            const ok = confirm("Unsaved changes. Go up anyway?");
+            if(!ok) return;
+        }
+        const parent = dirname(explorer.cwd);
+        explorer.cwd = parent.startsWith(explorer.root) ? parent : explorer.root;
+        explorer.selected = null;
+        if (elEditor) elEditor.value = "";
+        if (elEditorName) elEditorName.textContent = "No file selected";
+        if (elEditorHint) elEditorHint.textContent = "Folder opened";
+        markDirty(false);
+        await refreshList();
+    });
+
+    btnNewFile?.addEventListener("click", async () => {
+        if(!(await ensureReady())) return;
+        const name = prompt("New file name (relative to current folder):", "new.txt");
+        if(!name) return;
+
+        const full = joinPath(explorer.cwd, name);
+        if(isDir(full)){
+            alert("A folder with that name exists.");
+            return;
+        }
+
+        try{
+            if(!isFile(full)){
+                fs().writeFile(full, new Uint8Array());
+            }
+            explorer.selected = full;
+            if (elEditor) elEditor.value = "";
+            if (elEditorName) elEditorName.textContent = basename(full);
+            if (elEditorHint) elEditorHint.textContent = full;
+            markDirty(true);
+            await refreshList();
+        }catch(e){
+            appendOut("[explorer] create file failed:\n" + e);
+        }
+    });
+
+    btnNewFolder?.addEventListener("click", async () => {
+        if(!(await ensureReady())) return;
+        const name = prompt("New folder name (relative to current folder):", "folder");
+        if(!name) return;
+        const full = joinPath(explorer.cwd, name);
+        try{
+            fs().mkdir(full);
+            await refreshList();
+        }catch(e){
+            appendOut("[explorer] create folder failed:\n" + e);
+        }
+    });
+
+    btnSaveFile?.addEventListener("click", async () => {
+        if(!(await ensureReady())) return;
+        if(!explorer.selected){
+            alert("Select a file first.");
+            return;
+        }
+        try{
+            const data = new TextEncoder().encode(elEditor?.value || "");
+            fs().writeFile(explorer.selected, data);
+            markDirty(false);
+
+            if(explorer.selected.startsWith("/persist")){
+                try { await pyodide._persistFlush(); } catch(_) {}
+            }
+
+            appendOut(`[explorer] saved: ${explorer.selected} \u2705`);
+            await refreshList();
+        }catch(e){
+            appendOut("[explorer] save failed:\n" + e);
+        }
+    });
+
+    btnDelete?.addEventListener("click", async () => {
+        if(!(await ensureReady())) return;
+        const target = explorer.selected;
+        if(!target){
+            alert("Select a file first.");
+            return;
+        }
+        const ok = confirm(`Delete ${target}?`);
+        if(!ok) return;
+        try{
+            fs().unlink(target);
+            explorer.selected = null;
+            if (elEditor) elEditor.value = "";
+            if (elEditorName) elEditorName.textContent = "No file selected";
+            if (elEditorHint) elEditorHint.textContent = "Deleted";
+            markDirty(false);
+
+            if(target.startsWith("/persist")){
+                try { await pyodide._persistFlush(); } catch(_) {}
+            }
+
+            await refreshList();
+            appendOut("[explorer] deleted \u2705");
+        }catch(e){
+            appendOut("[explorer] delete failed:\n" + e);
+        }
+    });
+
+    btnDownload?.addEventListener("click", async () => {
+        if(!(await ensureReady())) return;
+        const target = explorer.selected;
+        if(!target){
+            alert("Select a file first.");
+            return;
+        }
+        try{
+            const bytes = fs().readFile(target);
+            const blob = new Blob([bytes], { type: "application/octet-stream" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = basename(target) || "download.bin";
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+        }catch(e){
+            appendOut("[explorer] download failed:\n" + e);
+        }
+    });
+
+    btnUpload?.addEventListener("click", async () => {
+        if(!(await ensureReady())) return;
+        if (uploadInput) uploadInput.value = "";
+        uploadInput?.click();
+    });
+
+    uploadInput?.addEventListener("change", async () => {
+        if(!(await ensureReady())) return;
+        const f = uploadInput.files?.[0];
+        if(!f) return;
+
+        try{
+            const buf = new Uint8Array(await f.arrayBuffer());
+            const dest = joinPath(explorer.cwd, f.name);
+            fs().writeFile(dest, buf);
+
+            if(dest.startsWith("/persist")){
+                try { await pyodide._persistFlush(); } catch(_) {}
+            }
+
+            appendOut(`[explorer] uploaded \u2192 ${dest} \u2705`);
+            await refreshList();
+        }catch(e){
+            appendOut("[explorer] upload failed:\n" + e);
+        }
+    });
+
+    async function bootPyodide(){
+        if (pyStatus) pyStatus.textContent = "loading...";
+        const cdnUrl = "https://cdn.jsdelivr.net/pyodide/v0.29.3/full/";
+        const localUrl = "./";
+        let loadedFromCdn = false;
+
+        try {
+            // Try loading from CDN first
+            appendOut("Attempting to load Pyodide from CDN...");
+            pyodide = await loadPyodide({ indexURL: cdnUrl });
+            loadedFromCdn = true;
+            appendOut("Pyodide loaded successfully from CDN.");
+        } catch (cdnErr) {
+            appendOut(`Failed to load Pyodide from CDN: ${cdnErr}. Attempting local load...`);
+            try {
+                // Fallback to local load
+                pyodide = await loadPyodide({ indexURL: localUrl });
+                appendOut("Pyodide loaded successfully from local files.");
+            } catch (localErr) {
+                if (pyStatus) pyStatus.textContent = "failed ❌";
+                if (ReplTitleStatus) ReplTitleStatus.style.color = "red";
+                appendOut("Failed to load Pyodide locally. Please ensure Pyodide files are in the correct directory.\n" + localErr);
+                return;
+            }
+        }
+
+        await setupFilesystems(pyodide);
+
+        pyodide.setStdout({ batched: (s) => appendOut(s) });
+        pyodide.setStderr({ batched: (s) => appendOut(s) });
+
+        if (pyStatus) pyStatus.textContent = "ready ✅";
+        if (ReplTitleStatus) ReplTitleStatus.style.color = "green";
+
+        await pyodide.runPythonAsync(`
+import sys, traceback
+
+def _repl_exec(code: str):
+    try:
+        try:
+            val = eval(code, globals(), globals())
+            if val is not None:
+                print(val)
+        except SyntaxError:
+            exec(code, globals(), globals())
+    except Exception:
+        traceback.print_exc()
+`);
+
+        if (out) out.textContent = "";
+        appendOut("Pyodide ready. Try: import sys; sys.version");
+        await refreshList();
+    }
+
+    // Move bootPyodide() call here to ensure `loadPyodide` is defined.
+    bootPyodide();
+
+    async function runCode(){
+        if(!pyodide){
+            appendOut("Pyodide not ready yet...");
+            return;
+        }
+        const code = input?.value || "";
+        appendOut(">>> " + (code.split("\n").join("\n... ")));
+        try{
+            await pyodide.runPythonAsync(`_repl_exec(${JSON.stringify(code)})`);
+            try { await pyodide._persistFlush(); } catch(_) {}
+        }catch(err){
+            appendOut(String(err));
+        }
+    }
+
+    runBtn?.addEventListener("click", runCode);
+    clearBtn?.addEventListener("click", () => { if (out) out.textContent = ""; });
+
+    const saveBtn = document.getElementById("replSave");
+    const resetBtn = document.getElementById("replReset");
+
+    saveBtn?.addEventListener("click", async () => {
+        if(!pyodide){ appendOut("Pyodide not ready yet..."); return; }
+        try{
+            await pyodide._persistFlush();
+            appendOut("[persist] flushed to IndexedDB \u2705");
+        }catch(e){
+            appendOut("[persist] flush failed \u274C\n" + e);
+        }
+    });
+
+    btnReload?.addEventListener("click", async () => {
+        if(!pyodide){ appendOut("Pyodide not ready yet..."); return; }
+        try{
+            await pyodide._persistReload();
+            appendOut("[persist] reloaded from IndexedDB \u2705");
+            await refreshList();
+        }catch(e){
+            appendOut("[persist] reload failed \u274C\n" + e);
+        }
+    });
+
+    resetBtn?.addEventListener("click", async () => {
+        if(!pyodide){ appendOut("Pyodide not ready yet..."); return; }
+        const ok = confirm("Delete ALL files in /persist (this cannot be undone)?");
+        if(!ok) return;
+        try{
+            await pyodide._persistWipe();
+            appendOut("[persist] wiped \u2705");
+        }catch(e){
+            appendOut("[persist] wipe failed \u274C\n" + e);
+        }
+    });
+
+    input?.addEventListener("keydown", (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === "Enter"){
+            e.preventDefault();
+            runCode();
+        }
+
+        if (e.key === "Tab") {
+            e.preventDefault();
+            const start = input.selectionStart;
+            const end = input.selectionEnd;
+
+            if (e.shiftKey) {
+                const value = input.value;
+                if (value.substring(start - 1, start) === "\t") {
+                    input.value = value.substring(0, start - 1) + value.substring(end);
+                    input.selectionStart = input.selectionEnd = start - 1;
+                }
+            } else {
+                input.value = input.value.substring(0, start) + "\t" + input.value.substring(end);
+                input.selectionStart = input.selectionEnd = start + 1;
+            }
+        }
+    });
+
+    if (btnExpand) {
+        if (typeof updateExpandButtonText === "function") updateExpandButtonText();
+        if (typeof positionExpandButton === "function") positionExpandButton();
+        btnExpand.addEventListener("click", () => {
+            if (explorerWindow) explorerWindow.classList.toggle("explorerMini");
+            if (typeof updateExpandButtonText === "function") updateExpandButtonText();
+            if (typeof positionExpandButton === "function") positionExpandButton();
+        });
+    }
+
+    if (input) {
+        input.addEventListener("input", function() {
+            this.style.height = "auto";
+            this.style.height = this.scrollHeight + "px";
+        });
+    }
+}
+
+
+// -------------------------------------------------------------
+// Theme switching
+// -------------------------------------------------------------
+function initTheme(){
+    const themeButtons = document.querySelectorAll('.theme-btn');
+    if (!themeButtons.length) return;
+    const body = document.body;
+
+    const savedTheme = localStorage.getItem('theme') || 'default';
+    themeButtons.forEach(btn => btn.classList.remove('active'));
+
+    if (savedTheme !== 'default') {
+        body.setAttribute('data-theme', savedTheme);
+        const savedBtn = document.querySelector(`[data-theme="${savedTheme}"]`);
+        if (savedBtn) savedBtn.classList.add('active');
+        const defaultBtn = document.querySelector('[data-theme="default"]');
+        if (defaultBtn) defaultBtn.classList.remove('active');
+    } else {
+        body.removeAttribute('data-theme');
+        const defaultBtn = document.querySelector('[data-theme="default"]');
+        if (defaultBtn) defaultBtn.classList.add('active');
+    }
+
+    themeButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            const theme = button.getAttribute('data-theme');
+
+            themeButtons.forEach(btn => btn.classList.remove('active'));
+            button.classList.add('active');
+
+            if (theme === 'default') {
+                body.removeAttribute('data-theme');
+            } else {
+                body.setAttribute('data-theme', theme);
+            }
+
+            localStorage.setItem('theme', theme || 'default');
+        });
+    });
+}
+
+
+// -------------------------------------------------------------
+// Main bootstrap
+// -------------------------------------------------------------
+document.addEventListener("DOMContentLoaded", () => {
+    pyStatus = document.getElementById("pyStatus");
+    out = document.getElementById("replOut");
+    input = document.getElementById("replIn");
+    runBtn = document.getElementById("replRun");
+    clearBtn = document.getElementById("replClear");
+    collapseBtn = document.getElementById("replCollapse");
+    repl = document.getElementById("repl");
+    explorerToggleBtn = document.getElementById("replExplorerToggle");
+    dockRTBtn = document.getElementById("dockRT");
+    dockRBBtn = document.getElementById("dockRB");
+    dockBLBtn = document.getElementById("dockBL");
+    dockBRBtn = document.getElementById("dockBR");
+    dockLTBtn = document.getElementById("dockLT");
+    dockLBBtn = document.getElementById("dockLB");
+    dockTLBtn = document.getElementById("dockTL");
+    dockTRBtn = document.getElementById("dockTR");
+    dockLeftBtn = document.getElementById("dockLeft");
+    dockRightBtn = document.getElementById("dockRight");
+    dockTopBtn = document.getElementById("dockTop");
+    dockBottomBtn = document.getElementById("dockBottom");
+    dockFloatBtn = document.getElementById("dockFloat");
+    explorerWindow = document.getElementById("explorerWindow");
+    explorerHeader = document.getElementById("explorerHeader");
+    explorerBody = document.getElementById("explorerBody");
+    explorerDockRTBtn = document.getElementById("explorerDockRT");
+    explorerDockRBBtn = document.getElementById("explorerDockRB");
+    explorerDockBLBtn = document.getElementById("explorerDockBL");
+    explorerDockBRBtn = document.getElementById("explorerDockBR");
+    explorerDockLTBtn = document.getElementById("explorerDockLT");
+    explorerDockLBBtn = document.getElementById("explorerDockLB");
+    explorerDockTLBtn = document.getElementById("explorerDockTL");
+    explorerDockTRBtn = document.getElementById("explorerDockTR");
+    explorerDockLeftBtn = document.getElementById("explorerDockLeft");
+    explorerDockRightBtn = document.getElementById("explorerDockRight");
+    explorerDockTopBtn = document.getElementById("explorerDockTop");
+    explorerDockBottomBtn = document.getElementById("explorerDockBottom");
+    explorerDockFloatBtn = document.getElementById("explorerDockFloat");
+    explorerMinBtn = document.getElementById("explorerMinimize");
+    explorerMaxBtn = document.getElementById("explorerMaximize");
+    explorerCloseBtn = document.getElementById("explorerClose");
+    dockSplitRight = document.getElementById("dockSplitRight");
+    dockSplitLeft = document.getElementById("dockSplitLeft");
+    dockSplitBottom = document.getElementById("dockSplitBottom");
+    dockSplitTop = document.getElementById("dockSplitTop");
+
+    elPath = document.getElementById("winPath");
+    elList = document.getElementById("fileList");
+    elEditor = document.getElementById("fileEditor");
+    elEditorName = document.getElementById("editorName");
+    elEditorHint = document.getElementById("editorPathHint");
+    elDirty = document.getElementById("dirtyHint");
+
+    navPersist = document.getElementById("navPersist");
+    navTmp = document.getElementById("navTmp");
+
+    btnUp = document.getElementById("btnUp");
+    btnReload = document.getElementById("btnReload");
+    btnNewFile = document.getElementById("btnNewFile");
+    btnNewFolder = document.getElementById("btnNewFolder");
+    btnSaveFile = document.getElementById("btnSaveFile");
+    btnDelete = document.getElementById("btnDelete");
+    btnDownload = document.getElementById("btnDownload");
+    btnUpload = document.getElementById("btnUpload");
+    uploadInput = document.getElementById("uploadInput");
+    btnExpand = document.getElementById("btnExpand");
+    ReplTitleStatus = document.getElementById("replTitleStatus");
+
+    initTables();
+    initRepl();
+    initWindowing();
+    initTheme();
+});
+
+</script>
+</body> <!-- /body -->
+</html> <!-- /html -->

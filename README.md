@@ -15,21 +15,21 @@ A core feature of this application is an integrated, floating Python Read-Eval-P
 
 ## Getting Started
 
-To get started with the Python Internals Decoding Ring, simply open the `index.html` file in your web browser.
+To get started with the Python Internals Decoding Ring, open `src/index.html` in your web browser.
 
 ```bash
 # Assuming you have cloned this repository
 cd Pyducation
-open index.html # On macOS
-start index.html # On Windows
-xdg-open index.html # On Linux
+open src/index.html # On macOS
+start src/index.html # On Windows
+xdg-open src/index.html # On Linux
 ```
 
 The application will load, and you can immediately begin browsing the Python internals reference.
 
 ## Pyodide Setup (CDN-first with local fallback)
 
-The REPL will try to load Pyodide from the CDN first and fall back to local files in the project directory if the CDN is unavailable. This means the REPL should work online out of the box as long as `pyodide.js` is present in the project root (this repo includes it already).
+The REPL will try to load Pyodide from the CDN first and fall back to local files in the same directory as the HTML file if the CDN is unavailable. This means the REPL should work online out of the box as long as `pyodide.js` is present in `src/` (this repo includes it already).
 
 **If the REPL shows "loading..." indefinitely or you want offline support, place the Pyodide core files locally:**
 
@@ -39,9 +39,24 @@ The REPL will try to load Pyodide from the CDN first and fall back to local file
     *   `python_stdlib.zip`: [https://cdn.jsdelivr.net/pyodide/v0.29.3/full/python_stdlib.zip](https://cdn.jsdelivr.net/pyodide/v0.29.3/full/python_stdlib.zip)
 
 2.  **Place Files in Project Directory**:
-    Move the downloaded `pyodide.js`, `pyodide.asm.wasm`, and `python_stdlib.zip` files into the root directory of this project (the same directory as `index.html`).
+    Move the downloaded `pyodide.js`, `pyodide.asm.wasm`, and `python_stdlib.zip` files into `src/` (the same directory as `src/index.html`).
 
-Once these files are in place, refresh `index.html` in your browser. The REPL should now initialize successfully.
+Once these files are in place, refresh `src/index.html` in your browser. The REPL should now initialize successfully.
+
+## Distribution (Bundled Build)
+
+Use the cross-platform packaging script in the project root to build `dist/index.html` with inlined CSS/JS and optional offline Pyodide assets.
+
+```bash
+node distribute.js
+```
+
+Menu options include:
+1. Build dist (inline CSS/JS)
+2. Build dist + offline Pyodide (download missing)
+3. Download Pyodide assets to dist/
+4. Clean dist/
+5. Status
 
 ## Usage
 
@@ -62,13 +77,13 @@ Once these files are in place, refresh `index.html` in your browser. The REPL sh
 
 This project is built using vanilla HTML, CSS, and JavaScript, without the use of complex frameworks, making it easy to understand and modify.
 
-*   `index.html`: The main entry point and structure of the application.
-*   `pyducation.main.js`: Initializes the application components.
-*   `pyducation.data.js`: Contains the structured data for Python internals.
-*   `pyducation.repl.js`: Manages the Pyodide REPL and file explorer logic.
-*   `pyducation.windowing.js`: Handles the interactive window management (dragging, resizing, docking).
-*   `pyducation.theme.js`: Manages theme switching.
-*   `pyducation.state.js`: Centralizes global state variables.
-*   `*.css`: Stylesheets for the application's appearance.
+*   `src/index.html`: The main entry point and structure of the application.
+*   `src/pyducation.main.js`: Initializes the application components.
+*   `src/pyducation.data.js`: Contains the structured data for Python internals.
+*   `src/pyducation.repl.js`: Manages the Pyodide REPL and file explorer logic.
+*   `src/pyducation.windowing.js`: Handles the interactive window management (dragging, resizing, docking).
+*   `src/pyducation.theme.js`: Manages theme switching.
+*   `src/pyducation.state.js`: Centralizes global state variables.
+*   `src/*.css`: Stylesheets for the application's appearance.
 
 Feel free to explore the codebase and contribute!
