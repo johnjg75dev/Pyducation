@@ -1,0 +1,359 @@
+/* -------------------------------------------------------------
+Win11-ish File Explorer panel inside REPL
+*/
+:root{
+    --winGlass: rgba(22, 26, 40, .78);
+    --winGlass2: rgba(255,255,255,.08);
+    --winStroke: rgba(255,255,255,.14);
+    --winStroke2: rgba(125,211,252,.26);
+    --winText2: rgba(255,255,255,.72);
+}
+
+#replBody{
+    /* allow body to fill the fixed repl height without extra caps */
+    max-height: none;
+}
+
+#replExplorer{
+    border: 1px solid var(--winStroke);
+    background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
+    border-radius: 16px;
+    overflow: hidden;
+    display:flex;
+    flex-direction:column;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+[data-theme="terminal"] #replExplorer{
+    background: rgba(0,0,0,.90);
+    border-color: rgba(0,255,0,.25);
+}
+
+#replExplorerTop{
+    display:flex;
+    flex-direction: column;
+    gap:8px;
+    padding: 10px;
+    background: rgba(255,255,255,.06);
+    border-bottom: 1px solid rgba(255,255,255,.10);
+}
+
+[data-theme="terminal"] #replExplorerTop{
+    background: rgba(0,20,0,.40);
+    border-bottom-color: rgba(0,255,0,.20);
+}
+
+.winPathRow{
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    width: 100%;
+}
+
+.winPath{
+    flex: 1;
+    display:flex;
+    align-items:center;
+    gap:8px;
+    padding: 8px 10px;
+    border-radius: 12px;
+    background: rgba(5,8,18,.45);
+    border: 1px solid rgba(255,255,255,.12);
+    font-family: var(--mono);
+    font-size: 12.5px;
+    color: rgba(255,255,255,.90);
+    overflow:hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.winBtnRow{
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+[data-theme="terminal"] .winPath{
+    background: rgba(0,0,0,.70);
+    border-color: rgba(0,255,0,.20);
+    color: #00ff00;
+}
+
+.winMiniBtn{
+    border:none;
+    cursor:pointer;
+    padding: 6px 8px;
+    border-radius: 8px;
+    background: rgba(255,255,255,.06);
+    border: 1px solid rgba(255,255,255,.12);
+    color: rgba(255,255,255,.88);
+    font-weight: 800;
+    font-size: 11px;
+    min-width: 32px;
+}
+
+.winBtnRow .winMiniBtn{
+    flex: 1;
+}
+
+.winPathRow .winMiniBtn{
+    flex: none;
+    width: 32px;
+}
+.winMiniBtn:hover{ background: rgba(255,255,255,.10); }
+.winMiniBtn:active{ transform: translateY(1px); }
+#replCollapse {
+    font-weight: bold;
+    font-size: 1.2em;
+}
+[data-theme="terminal"] .winMiniBtn{
+    background: rgba(0,0,0,.60);
+    border-color: rgba(0,255,0,.20);
+    color: rgba(0,255,0,.90);
+}
+
+[data-theme="terminal"] .winMiniBtn:hover{
+    background: rgba(0,255,0,.15);
+    border-color: rgba(0,255,0,.35);
+    color: #00ff00;
+}
+
+#replExplorerBody{
+    display:grid;
+    grid-template-columns: 230px 1fr;
+    gap:0;
+    min-height: 220px;
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+}
+
+#replExplorerLeft{
+    border-right: 1px solid rgba(255,255,255,.10);
+    background: rgba(10,14,28,.35);
+    padding: 10px;
+    display:flex;
+    flex-direction:column;
+    min-height: 0;
+}
+
+[data-theme="terminal"] #replExplorerLeft{
+    background: rgba(0,0,0,.60);
+    border-right-color: rgba(0,255,0,.15);
+}
+
+.winNav{
+    display:flex;
+    gap:8px;
+    margin-bottom: 10px;
+}
+.winNavBtn{
+    flex:1;
+    padding: 8px 10px;
+    border-radius: 12px;
+    border: 1px solid rgba(255,255,255,.12);
+    background: rgba(255,255,255,.05);
+    color: rgba(255,255,255,.85);
+    cursor:pointer;
+    font-weight:800;
+    font-size: 12.5px;
+}
+.winNavBtn.active{
+    border-color: var(--winStroke2);
+    background: rgba(125,211,252,.10);
+    color: rgba(125,211,252,.95);
+}
+
+#fileList{
+    max-height: none;
+    overflow:auto;
+    padding-right: 2px;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+[data-theme="terminal"] .winNavBtn{
+    background: rgba(0,0,0,.40);
+    border-color: rgba(0,255,0,.20);
+    color: rgba(0,255,0,.85);
+}
+
+[data-theme="terminal"] .winNavBtn.active{
+    background: rgba(0,255,0,.15);
+    border-color: rgba(0,255,0,.40);
+    color: #00ff00;
+}
+
+.fileRow{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    padding: 8px 10px;
+    border-radius: 12px;
+    cursor:pointer;
+    border: 1px solid transparent;
+    color: rgba(255,255,255,.86);
+}
+.fileRow:hover{
+    background: rgba(255,255,255,.06);
+    border-color: rgba(255,255,255,.10);
+}
+.fileRow.active{
+    background: rgba(125,211,252,.10);
+    border-color: rgba(125,211,252,.22);
+}
+
+[data-theme="terminal"] .fileRow{
+    color: rgba(0,255,0,.90);
+}
+
+[data-theme="terminal"] .fileRow:hover{
+    background: rgba(0,255,0,.08);
+    border-color: rgba(0,255,0,.20);
+}
+
+[data-theme="terminal"] .fileRow.active{
+    background: rgba(0,255,0,.15);
+    border-color: rgba(0,255,0,.30);
+    color: #00ff00;
+}
+.fileName{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    min-width:0;
+}
+.fileName span{
+    overflow:hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.fileMeta{
+    font-family: var(--mono);
+    font-size: 11.5px;
+    color: var(--winText2);
+    white-space:nowrap;
+}
+
+#replExplorerRight{
+    padding: 10px;
+    background: rgba(5,8,18,.25);
+    display:flex;
+    flex-direction:column;
+    min-height: 0;
+}
+
+#btnExpand{
+    position: absolute;
+    right: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+    min-width: 34px;
+    height: 30px;
+    padding: 0 6px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2;
+    opacity: 0.7;
+    background: rgba(255,255,255,.08);
+    border-color: rgba(255,255,255,.22);
+    box-shadow: 0 2px 8px rgba(0,0,0,.25);
+}
+[data-theme="terminal"] #btnExpand{
+    background: rgba(0,255,0,.10);
+    border-color: rgba(0,255,0,.35);
+    color: #00ff00;
+    box-shadow: 0 0 8px rgba(0,255,0,.15);
+}
+
+#fileEditorTitle{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    margin-bottom: 8px;
+}
+#fileEditorTitle .name{
+    font-weight: 900;
+    letter-spacing: .01em;
+}
+#fileEditorTitle .hint{
+    color: var(--winText2);
+    font-size: 12px;
+    font-family: var(--mono);
+}
+
+#fileEditor{
+    width:100%;
+    min-height: 180px;
+    max-height: none;
+    resize: vertical;
+    padding: 10px 12px;
+    border-radius: 14px;
+    border: 1px solid rgba(255,255,255,.14);
+    background: rgba(5,8,18,.55);
+    color: rgba(255,255,255,.92);
+    outline:none;
+    font-family: var(--mono);
+    font-size: 12.6px;
+    line-height: 1.45;
+    flex: 1 1 auto;
+}
+#fileEditor:focus{
+    border-color: rgba(125,211,252,.55);
+    box-shadow: 0 0 0 4px rgba(125,211,252,.10);
+}
+
+#fileActions{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    margin-top: 10px;
+    align-items:center;
+    margin-top: auto;
+}
+.winAction{
+    padding: 8px 10px;
+    border-radius: 12px;
+    border: 1px solid rgba(255,255,255,.12);
+    background: rgba(255,255,255,.06);
+    color: rgba(255,255,255,.88);
+    cursor:pointer;
+    font-weight:900;
+    font-size: 12.5px;
+}
+.winAction:hover{ background: rgba(255,255,255,.10); }
+.winAction.primary{
+    background: rgba(52,211,153,.12);
+    border-color: rgba(52,211,153,.22);
+    color: rgba(52,211,153,.95);
+}
+.winAction.danger{
+    background: rgba(251,113,133,.12);
+    border-color: rgba(251,113,133,.22);
+    color: rgba(251,113,133,.95);
+}
+
+#uploadInput{
+    display:none;
+}
+/* Explorer visibility modes */
+#explorerWindow.hidden #replExplorer{ display:none; }
+
+/* Mini mode: show top bar + left list only, hide editor pane */
+#explorerWindow.explorerMini #replExplorerBody{
+    grid-template-columns: 1fr; /* only left pane */
+}
+#explorerWindow.explorerMini #replExplorerRight{ display:none; }
+
+/* Make the file list taller in mini mode */
+#explorerWindow.explorerMini #fileList{ max-height: 260px; }
+
+/* Only constrain height in mini mode; expanded should show full content */
+#explorerWindow.explorerMini #replExplorer{
+    max-height: 320px;
+}

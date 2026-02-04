@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+
+    <title>Python internals decoding ring — dunders + non-dunder runtime attrs + floating Py REPL</title>
+
+    <link rel="stylesheet" href="tags.theme.css"/>
+    <link rel="stylesheet" href="tags.base.css"/>
+    <link rel="stylesheet" href="tags.window.css"/>
+    <link rel="stylesheet" href="tags.explorer.css"/>
+    <!-- Pyodide loader (online-accessible WASM runtime) -->
+    <script src="./pyodide.js"></script>
+
+</head> <!-- /head -->
+
+<body>
+
+<header>
+    <div class="hero">
+        <h1>Python internals decoding ring 🧠⚙️</h1>
+        <p class="sub">
+            Two maps in one:
+            <br>• <b>Dunders</b> (<code>__x__</code>) — the special “hooks” Python itself calls for operators, iteration, attribute access, async, pickling…
+            <br>• <b>Non-dunder internals</b> — the runtime attributes you’ll still encounter in tracebacks, profiling, debuggers, decorators, and the ecosystem.
+            <br><br>
+            Bonus: a <b>floating, collapsible, always-on-top Python REPL</b> powered by <b>Pyodide (CPython → WebAssembly)</b>.
+        </p>
+
+        <div class="pillbar">
+            <div class="pill"><strong>Search:</strong> <code>__matmul__</code> · <code>__traceback__</code> · <code>co_varnames</code> · <code>gi_frame</code></div> <!-- /div.pill -->
+            <div class="pill"><strong>Hotkeys:</strong> <span class="kbd">/</span> focus search · <span class="kbd">Ctrl</span>+<span class="kbd">Enter</span> run REPL</div> <!-- /div.pill -->
+            <div class="pill"><strong>Reality:</strong> community libs add internals, but most avoid new <code>__x__</code> names (reserved).</div> <!-- /div.pill -->
+
+            <div class="theme-selector">
+                <span style="font-size: 12px; color: var(--faint); margin-right: 6px;">Theme:</span>
+                <button class="theme-btn active" data-theme="default">Default</button>
+                <button class="theme-btn" data-theme="terminal">Terminal</button>
+            </div>
+        </div> <!-- /div.pillbar -->
+    </div> <!-- /div.hero -->
+</header> <!-- /header -->
+
+<main>
+    <div class="controls">
+        <div class="control">
+            <label for="q">Search (name, meaning, example)</label>
+            <input id="q" type="text" placeholder="e.g. __getattribute__ | __traceback__ | co_names | f_locals | wraps | inspect" />
+        </div> <!-- /div.control -->
+
+        <div class="control">
+            <label for="cat">Category</label>
+            <select id="cat">
+                <option value="all">All</option>
+                <option value="dunder">Dunders (language data model)</option>
+                <option value="nond">Non-dunder internals (runtime objects)</option>
+                <option value="tooling">Tooling / ecosystem internals</option>
+            </select> <!-- /select#cat -->
+        </div> <!-- /div.control -->
+
+        <div class="control">
+            <label for="kind">Kind</label>
+            <select id="kind">
+                <option value="all">All</option>
+                <option value="dunder">__dunder__</option>
+                <option value="nond">non-dunder</option>
+            </select> <!-- /select#kind -->
+        </div> <!-- /div.control -->
+    </div> <!-- /div.controls -->
+
+    <div class="stats">
+        <div class="stat">Showing: <b id="shown">0</b> / <b id="total">0</b></div> <!-- /div.stat -->
+        <div class="stat">Filter: <span class="muted" id="filterLabel">none</span></div> <!-- /div.stat -->
+    </div> <!-- /div.stats -->
+    <div class="sectionTitle"><span class="dot"></span> Dunders you'll actually encounter</div>
+    <!-- /div.sectionTitle -->
+    <div class="tablewrap">
+        <table id="t1">
+            <thead>
+            <tr>
+                <th style="width: 250px;">Name</th>
+                <th style="width: 140px;">Type</th>
+                <th style="width: 220px;">Where</th>
+                <th>Meaning & when it's used</th>
+            </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div> <!-- /div.tablewrap -->
+
+    <div class="sectionTitle" style="margin-top:22px;"><span class="dot"></span> Non-dunder internals you'll still see
+        in the wild
+    </div> <!-- /div.sectionTitle -->
+    <div class="tablewrap">
+        <table id="t2">
+            <thead>
+            <tr>
+                <th style="width: 250px;">Name</th>
+                <th style="width: 160px;">Object</th>
+                <th style="width: 220px;">Where</th>
+                <th>Meaning & why you'll see it</th>
+            </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div> <!-- /div.tablewrap -->
+
+    <details>
+        <summary>
+            "Always-on-top" REPL details <span class="muted">WASM via Pyodide, draggable, collapsible</span>
+        </summary>
+        <div class="detailsBody">
+            <div class="tiny">
+                This REPL runs <b>CPython compiled to WebAssembly</b> using Pyodide. It's "online-accessible" because it
+                loads
+                the runtime from a CDN. To make it offline, download the pyodide distribution and change the <code>indexURL</code>
+                in the script at the bottom of the page.
+                <br><br>
+                <b>Controls:</b>
+                <ul>
+                    <li><code>Ctrl+Enter</code> runs the code in the editor.</li>
+                    <li><code>Clear</code> wipes the output pane.</li>
+                    <li><code>▾</code> collapses the REPL to a slim bar.</li>
+                    <li>Drag the header to move it around.</li>
+                </ul>
+            </div>
+        </div> <!-- /div.detailsBody -->
+    </details>
+</main>
+<footer>
+    If you ever wonder “why did Python call that?”—search for the syntax (like <code>a @ b</code> or <code>for x in y</code>),
+    then look up the dunder hook. If you wonder “what is that weird attribute in a traceback?”—it’s usually in the non-dunder table.
+</footer> <!-- /footer -->
+
+<!-- ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+     Floating REPL (always on top)
+ ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── -->
+<div id="repl" aria-label="Floating Python REPL" class="collapsed">
+    <div id="replHeader">
+        <div id="replTitle">
+            <span id="replTitleStatus">Python REPL</span>
+        </div> <!-- /div#replTitle -->
+        <div id="replHeaderControls">
+            <button class="btn" id="dockLeft" title="Dock left (full)">L</button>
+            <button class="btn" id="dockRight" title="Dock right (full)">R</button>
+            <button class="btn" id="dockTop" title="Dock top (full)">T</button>
+            <button class="btn" id="dockBottom" title="Dock bottom (full)">B</button>
+            <button class="btn" id="dockLT" title="Dock left top">LT</button>
+            <button class="btn" id="dockLB" title="Dock left bottom">LB</button>
+            <button class="btn" id="dockRT" title="Dock right top">RT</button>
+            <button class="btn" id="dockRB" title="Dock right bottom">RB</button>
+            <button class="btn" id="dockTL" title="Dock top left">TL</button>
+            <button class="btn" id="dockTR" title="Dock top right">TR</button>
+            <button class="btn" id="dockBL" title="Dock bottom left">BL</button>
+            <button class="btn" id="dockBR" title="Dock bottom right">BR</button>
+            <button class="btn" id="dockFloat" title="Float window">Float</button>
+            <button class="btn" id="replCollapse" title="Collapse / expand">+</button>
+        </div> <!-- /div#replHeaderControls -->
+    </div> <!-- /div#replHeader -->
+
+    <div id="replCollapsed">
+        Collapsed. Click <b>+</b> to expand.
+        Status: <code id="pyStatus">loading…</code>
+    </div> <!-- /div#replCollapsed -->
+
+    <div id="replBody">
+
+        <div id="replBtns">
+            <button class="btn" id="replExplorerToggle" title="Toggle Explorer">Files</button>
+            <button class="btn" id="replSave" title="Flush /persist → IndexedDB">Save</button>
+            <button class="btn" id="replClear" title="Clear output">Clear</button>
+        </div> <!-- /div#replBtns -->
+        <div id="replOut" role="log" aria-live="polite">Status: <code id="pyStatus">loading…</code></div> <!-- /div#replOut -->
+
+        <!-- REPL Input -->
+        <div id="replInWrap">
+        <textarea id="replIn" spellcheck="false">print(sys)</textarea>
+            <button class="btn primary" id="replRun" title="Run (Ctrl+Enter)">Run</button>
+        </div> <!-- /div#replInWrap -->
+
+    </div> <!-- /div#replBody -->
+    <div class="repl-resizer repl-resizer-n" data-dir="n"></div>
+    <div class="repl-resizer repl-resizer-s" data-dir="s"></div>
+    <div class="repl-resizer repl-resizer-e" data-dir="e"></div>
+    <div class="repl-resizer repl-resizer-w" data-dir="w"></div>
+    <div class="repl-resizer repl-resizer-ne" data-dir="ne"></div>
+    <div class="repl-resizer repl-resizer-nw" data-dir="nw"></div>
+    <div class="repl-resizer repl-resizer-se" data-dir="se"></div>
+    <div class="repl-resizer repl-resizer-sw" data-dir="sw"></div>
+</div> <!-- /div#repl -->
+
+<!-- ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+|    Floating File Explorer Window
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────-->
+<div id="explorerWindow" aria-label="Floating File Explorer" class="floating-window hidden explorerMini">
+    <div id="explorerHeader">
+        <div id="explorerTitle">File Explorer</div>
+        <div id="explorerHeaderControls">
+            <button class="btn" id="explorerDockLeft" title="Dock left (full)">L</button>
+            <button class="btn" id="explorerDockRight" title="Dock right (full)">R</button>
+            <button class="btn" id="explorerDockTop" title="Dock top (full)">T</button>
+            <button class="btn" id="explorerDockBottom" title="Dock bottom (full)">B</button>
+            <button class="btn" id="explorerDockLT" title="Dock left top">LT</button>
+            <button class="btn" id="explorerDockLB" title="Dock left bottom">LB</button>
+            <button class="btn" id="explorerDockRT" title="Dock right top">RT</button>
+            <button class="btn" id="explorerDockRB" title="Dock right bottom">RB</button>
+            <button class="btn" id="explorerDockTL" title="Dock top left">TL</button>
+            <button class="btn" id="explorerDockTR" title="Dock top right">TR</button>
+            <button class="btn" id="explorerDockBL" title="Dock bottom left">BL</button>
+            <button class="btn" id="explorerDockBR" title="Dock bottom right">BR</button>
+            <button class="btn" id="explorerDockFloat" title="Float window">Float</button>
+            <button class="btn" id="explorerMinimize" title="Minimize">Min</button>
+            <button class="btn" id="explorerMaximize" title="Maximize">Max</button>
+            <button class="btn" id="explorerClose" title="Close">X</button>
+        </div> <!-- /div#explorerHeaderControls -->
+    </div> <!-- /div#explorerHeader -->
+
+    <div id="explorerBody">
+        <div id="replExplorer" aria-label="Mini File Explorer">
+            <div id="replExplorerTop">
+                <div class="winPathRow">
+                    <div class="winPath" id="winPath">/persist</div> <!-- /div.winPath -->
+                </div>
+
+                <div class="winBtnRow">
+                    <button class="winMiniBtn" id="btnUp" title="Up one folder">..</button>
+                    <button class="winMiniBtn" id="btnReload" title="Refresh list">⟳</button>
+
+                </div>
+
+            </div> <!-- /div#replExplorerTop -->
+
+            <div id="replExplorerBody">
+                <div id="replExplorerLeft">
+                    <div class="winNav">
+                        <button class="winNavBtn active" id="navPersist">Persist</button>
+                        <button class="winNavBtn" id="navTmp">Temp</button>
+                        <button class="btn warn" id="replReset" title="Delete ALL persistent files">Reset</button>
+                    </div> <!-- /div.winNav -->
+
+                    <div id="fileList"></div> <!-- /div#fileList -->
+                </div> <!-- /div#replExplorerLeft -->
+
+                <div id="replExplorerRight">
+                    <div id="fileEditorTitle">
+                        <div>
+                            <div class="name" id="editorName">No file selected</div> <!-- /div.name -->
+                            <div class="hint" id="editorPathHint">Click a file to edit</div> <!-- /div.hint -->
+                        </div> <!-- /div -->
+                        <div class="hint" id="dirtyHint"></div> <!-- /div.hint -->
+                    </div> <!-- /div#fileEditorTitle -->
+
+                    <textarea id="fileEditor" spellcheck="false" placeholder="Select a file, or create a new one…"></textarea>
+
+                    <div id="fileActions">
+                        <button class="winAction" id="btnNewFile">New File</button>
+                        <button class="winAction" id="btnNewFolder">New Folder</button>
+                        <button class="winAction primary" id="btnSaveFile">Save</button>
+                        <button class="winAction" id="btnDownload">Download</button>
+                        <button class="winAction" id="btnUpload">Upload</button>
+                        <button class="winAction danger" id="btnDelete">Delete</button>
+                        <input type="file" id="uploadInput" />
+                    </div> <!-- /div#fileActions -->
+                </div> <!-- /div#replExplorerRight -->
+                <button class="winMiniBtn" id="btnExpand" title="Toggle mini/full">+</button>
+            </div> <!-- /div#replExplorerBody -->
+        </div> <!-- /div#replExplorer -->
+    </div> <!-- /div#explorerBody -->
+
+    <div class="repl-resizer repl-resizer-n" data-dir="n"></div>
+    <div class="repl-resizer repl-resizer-s" data-dir="s"></div>
+    <div class="repl-resizer repl-resizer-e" data-dir="e"></div>
+    <div class="repl-resizer repl-resizer-w" data-dir="w"></div>
+    <div class="repl-resizer repl-resizer-ne" data-dir="ne"></div>
+    <div class="repl-resizer repl-resizer-nw" data-dir="nw"></div>
+    <div class="repl-resizer repl-resizer-se" data-dir="se"></div>
+    <div class="repl-resizer repl-resizer-sw" data-dir="sw"></div>
+</div> <!-- /div#explorerWindow -->
+
+<div id="dockSplitRight" class="dock-split dock-split-right"></div>
+<div id="dockSplitLeft" class="dock-split dock-split-right"></div>
+<div id="dockSplitBottom" class="dock-split dock-split-bottom"></div>
+<div id="dockSplitTop" class="dock-split dock-split-bottom"></div>
+
+<script src="tags.state.js"></script>
+<script src="tags.data.js"></script>
+<script src="tags.tables.js"></script>
+<script src="tags.windowing.js"></script>
+<script src="tags.repl.js"></script>
+<script src="tags.theme.js"></script>
+<script src="tags.main.js"></script>
+</body> <!-- /body -->
+</html> <!-- /html -->

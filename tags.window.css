@@ -1,0 +1,469 @@
+/* -------------------------------------------------------------
+   Floating REPL (always on top, collapsible, draggable)
+   ------------------------------------------------------------- */
+#repl{
+    position: fixed;
+    right: 18px;
+    bottom: 18px;
+    width: 720px;
+    height: min(66vh, 560px);
+    min-width: 360px;
+    min-height: 100px;
+    border-radius: 18px;
+    border: 1px solid rgba(255,255,255,.14);
+    background: rgba(10,14,28,.78);
+    box-shadow: 0 22px 70px rgba(0,0,0,.55);
+    backdrop-filter: blur(10px);
+    z-index: 999999; /* ALWAYS on top-ish */
+    overflow:hidden;
+    display:flex;
+    flex-direction:column;
+}
+
+[data-theme="terminal"] #repl{
+    background: rgba(0,0,0,.95);
+    border-color: rgba(0,255,0,.30);
+    box-shadow: 0 22px 70px rgba(0,0,0,.80), 0 0 20px rgba(0,255,0,.15);
+}
+
+#explorerWindow{
+    position: fixed;
+    left: 18px;
+    bottom: 18px;
+    width: 560px;
+    height: min(70vh, 600px);
+    min-width: 360px;
+    min-height: 260px;
+    border-radius: 18px;
+    border: 1px solid rgba(255,255,255,.14);
+    background: rgba(10,14,28,.78);
+    box-shadow: 0 22px 70px rgba(0,0,0,.55);
+    backdrop-filter: blur(10px);
+    z-index: 1000000;
+    overflow:hidden;
+    display:flex;
+    flex-direction:column;
+}
+
+[data-theme="terminal"] #explorerWindow{
+    background: rgba(0,0,0,.95);
+    border-color: rgba(0,255,0,.30);
+    box-shadow: 0 22px 70px rgba(0,0,0,.80), 0 0 20px rgba(0,255,0,.15);
+}
+
+#explorerWindow.hidden{ display:none; }
+
+#explorerWindow.minimized #explorerBody{ display:none; }
+#explorerWindow.minimized{ height:auto; }
+#explorerWindow.minimized .repl-resizer{ display:none; }
+
+#explorerWindow.maximized{
+    left:0;
+    top:0;
+    right:0;
+    bottom:0;
+    width:100%;
+    height:100vh;
+    border-radius:0;
+}
+#explorerWindow.maximized .repl-resizer{ display:none; }
+
+#replHeaderControls{
+    display:flex;
+    gap:6px;
+    align-items:center;
+}
+
+#dockFloat{ display:none; }
+#repl.docked #dockFloat{ display:inline-flex; }
+#repl.docked #dockLeft,
+#repl.docked #dockRight,
+#repl.docked #dockTop,
+#repl.docked #dockBottom,
+#repl.docked #dockLT,
+#repl.docked #dockLB,
+#repl.docked #dockRT,
+#repl.docked #dockRB,
+#repl.docked #dockTL,
+#repl.docked #dockTR,
+#repl.docked #dockBL,
+#repl.docked #dockBR{ display:none; }
+
+#repl.dock-right,
+#repl.dock-left,
+#repl.dock-top,
+#repl.dock-bottom{
+    border-radius: 0;
+}
+
+#explorerHeader{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    padding: 10px 12px;
+    background: rgba(255,255,255,.07);
+    border-bottom: 1px solid rgba(255,255,255,.10);
+    cursor: grab;
+    user-select:none;
+}
+
+[data-theme="terminal"] #explorerHeader{
+    background: rgba(0,20,0,.60);
+    border-bottom-color: rgba(0,255,0,.20);
+}
+
+#explorerHeader:active{ cursor: grabbing; }
+
+#explorerTitle{
+    font-weight:800;
+    letter-spacing:.01em;
+}
+
+#explorerHeaderControls{
+    display:flex;
+    gap:6px;
+    align-items:center;
+}
+
+#explorerDockFloat{ display:none; }
+#explorerWindow.docked #explorerDockFloat{ display:inline-flex; }
+#explorerWindow.docked #explorerDockLeft,
+#explorerWindow.docked #explorerDockRight,
+#explorerWindow.docked #explorerDockTop,
+#explorerWindow.docked #explorerDockBottom,
+#explorerWindow.docked #explorerDockLT,
+#explorerWindow.docked #explorerDockLB,
+#explorerWindow.docked #explorerDockRT,
+#explorerWindow.docked #explorerDockRB,
+#explorerWindow.docked #explorerDockTL,
+#explorerWindow.docked #explorerDockTR,
+#explorerWindow.docked #explorerDockBL,
+#explorerWindow.docked #explorerDockBR{ display:none; }
+
+#explorerWindow.dock-right,
+#explorerWindow.dock-left,
+#explorerWindow.dock-top,
+#explorerWindow.dock-bottom{
+    border-radius: 0;
+}
+
+#explorerBody{
+    flex: 1 1 auto;
+    min-height: 0;
+    display:flex;
+    flex-direction:column;
+}
+#replHeader{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    padding: 10px 12px;
+    background: rgba(255,255,255,.07);
+    border-bottom: 1px solid rgba(255,255,255,.10);
+    cursor: grab;
+    user-select:none;
+}
+
+[data-theme="terminal"] #replHeader{
+    background: rgba(0,20,0,.60);
+    border-bottom-color: rgba(0,255,0,.20);
+}
+#replHeader:active{ cursor: grabbing; }
+#replTitle{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    font-weight:800;
+    letter-spacing:.01em;
+}
+#replTitleStatus {
+    color: goldenrod;
+}
+#replTitle .badge{
+    font-family:var(--mono);
+    font-size:12px;
+    padding: 3px 8px;
+    border-radius: 999px;
+    background: rgba(125,211,252,.10);
+    border: 1px solid rgba(125,211,252,.22);
+    color: rgba(125,211,252,.92);
+}
+#replBtns{ display:flex; gap:4px; align-items:center; }
+.btn{
+    border:none;
+    background: none;
+    border: 1px solid rgba(255,255,255,.20);
+    box-shadow: none;
+    color: rgba(255,255,255,.92);
+    padding: 4px 8px;
+    border-radius: 3px;
+    cursor:pointer;
+    font-weight:500;
+    font-size: 11px;
+    backdrop-filter: blur(8px);
+    transition: all 0.15s ease;
+    font-family: var(--mono);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+[data-theme="terminal"] .btn{
+    border-color: rgba(0,255,0,.30);
+    color: rgba(0,255,0,.90);
+    padding: 3px 6px;
+    border-radius: 2px;
+    font-size: 10px;
+    font-weight: 700;
+}
+.btn:hover{ 
+    background: rgba(255,255,255,.10);
+    border-color: rgba(255,255,255,.35);
+}
+.btn:active{ 
+    background: rgba(255,255,255,.15);
+    transform: none;
+}
+
+[data-theme="terminal"] .btn:hover{
+    background: rgba(0,255,0,.15);
+    border-color: rgba(0,255,0,.50);
+    color: #00ff00;
+}
+
+[data-theme="terminal"] .btn:active{
+    background: rgba(0,255,0,.25);
+    color: #00ff00;
+}
+.btn.primary{
+    background: none;
+    border-color: rgba(52,211,153,.30);
+    color: rgba(52,211,153,.98);
+    box-shadow: none;
+}
+.btn.primary:hover{
+    background: rgba(52,211,153,.15);
+    border-color: rgba(52,211,153,.50);
+}
+.btn.warn{
+    background: none;
+    border-color: rgba(251,113,133,.30);
+    color: rgba(251,113,133,.98);
+    box-shadow: none;
+}
+.btn.warn:hover{
+    background: rgba(251,113,133,.15);
+    border-color: rgba(251,113,133,.50);
+}
+
+[data-theme="terminal"] .btn.primary{
+    border-color: rgba(0,255,0,.40);
+    color: rgba(0,255,0,.95);
+}
+
+[data-theme="terminal"] .btn.primary:hover{
+    background: rgba(0,255,0,.20);
+    border-color: rgba(0,255,0,.60);
+    color: #00ff00;
+}
+
+[data-theme="terminal"] .btn.warn{
+    border-color: rgba(255,255,0,.40);
+    color: rgba(255,255,0,.95);
+}
+
+[data-theme="terminal"] .btn.warn:hover{
+    background: rgba(255,255,0,.20);
+    border-color: rgba(255,255,0,.60);
+    color: #ffff00;
+}
+
+/* Windows titlebar-style toggle button */
+#replCollapse {
+    background: none;
+    border: none;
+    border-radius: 0;
+    padding: 6px 10px;
+    font-weight: bold;
+    font-size: 14px;
+    min-width: 28px;
+    box-shadow: none;
+    transition: all 0.1s ease;
+}
+#replCollapse:hover {
+    background: linear-gradient(180deg, rgba(125,211,252,.12) 0%, rgba(125,211,252,.04) 100%);
+    border-color: rgba(125,211,252,.25);
+    color: rgba(125,211,252,.95);
+    box-shadow: 
+        inset 0 1px 0 rgba(125,211,252,.15),
+        0 1px 3px rgba(0,0,0,.25),
+        0 0 6px rgba(125,211,252,.10);
+}
+#replCollapse:active {
+    background: linear-gradient(180deg, rgba(0,0,0,.08) 0%, rgba(255,255,255,.05) 100%);
+    box-shadow: inset 0 1px 2px rgba(0,0,0,.20);
+    transform: none;
+}
+
+#replBody{
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+    padding: 12px;
+}
+/* Ensure the REPL body can scroll if content gets tall */
+#replBody{
+    overflow: auto;
+    flex: 1 1 auto;
+    min-height: 0;
+    padding-bottom: 12px;
+}
+
+[data-theme="terminal"] #replBody{
+    background: rgba(0,0,0,.40);
+}
+
+#replStatus{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    color: var(--muted);
+    font-size: 12.5px;
+}
+#replStatus code{ color: rgba(255,255,255,.82); }
+#replOut{
+    background: rgba(5,8,18,.55);
+    border: 1px solid rgba(255,255,255,.10);
+    border-radius: 14px;
+    padding: 10px 10px;
+    overflow:auto;
+    max-height: 200px;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.45;
+    color: rgba(255,255,255,.90);
+    white-space: pre-wrap;
+}
+
+[data-theme="terminal"] #replOut{
+    background: rgba(0,10,0,.80);
+    border-color: rgba(0,255,0,.25);
+    color: #00ff00;
+}
+#replInWrap{
+    display:grid;
+    grid-template-columns: 1fr auto;
+    gap:10px;
+    align-items:start;
+    position: sticky;
+    bottom: 0;
+    z-index: 3;
+    background: rgba(5,8,18,.65);
+    padding-top: 8px;
+}
+[data-theme="terminal"] #replInWrap{
+    background: rgba(0,0,0,.75);
+}
+
+.dock-split{
+    position: fixed;
+    z-index: 1000002;
+    display:none;
+    background: rgba(255,255,255,.12);
+    box-shadow: 0 0 6px rgba(0,0,0,.35);
+}
+[data-theme="terminal"] .dock-split{
+    background: rgba(0,255,0,.25);
+    box-shadow: 0 0 8px rgba(0,255,0,.25);
+}
+.dock-split-right{
+    height: 6px;
+    cursor: row-resize;
+}
+.dock-split-bottom{
+    width: 6px;
+    cursor: col-resize;
+}
+
+.repl-resizer{
+    position: absolute;
+    z-index: 6;
+    background: transparent;
+}
+.repl-resizer:hover{
+    background: rgba(255,255,255,.06);
+}
+[data-theme="terminal"] .repl-resizer:hover{
+    background: rgba(0,255,0,.12);
+}
+.repl-resizer-n{ top:-4px; left:8px; right:8px; height:8px; cursor: n-resize; }
+.repl-resizer-s{ bottom:-4px; left:8px; right:8px; height:8px; cursor: s-resize; }
+.repl-resizer-e{ right:-4px; top:8px; bottom:8px; width:8px; cursor: e-resize; }
+.repl-resizer-w{ left:-4px; top:8px; bottom:8px; width:8px; cursor: w-resize; }
+.repl-resizer-ne{ right:-4px; top:-4px; width:12px; height:12px; cursor: ne-resize; }
+.repl-resizer-nw{ left:-4px; top:-4px; width:12px; height:12px; cursor: nw-resize; }
+.repl-resizer-se{ right:-4px; bottom:-4px; width:12px; height:12px; cursor: se-resize; }
+.repl-resizer-sw{ left:-4px; bottom:-4px; width:12px; height:12px; cursor: sw-resize; }
+
+#repl.dock-right .repl-resizer,
+#repl.dock-left .repl-resizer,
+#repl.dock-top .repl-resizer,
+#repl.dock-bottom .repl-resizer,
+#explorerWindow.dock-right .repl-resizer,
+#explorerWindow.dock-left .repl-resizer,
+#explorerWindow.dock-top .repl-resizer,
+#explorerWindow.dock-bottom .repl-resizer{ display:none; }
+#repl.dock-right .repl-resizer-w,
+#explorerWindow.dock-right .repl-resizer-w{ display:block; }
+#repl.dock-left .repl-resizer-e,
+#explorerWindow.dock-left .repl-resizer-e{ display:block; }
+#repl.dock-bottom .repl-resizer-n,
+#explorerWindow.dock-bottom .repl-resizer-n{ display:block; }
+#repl.dock-top .repl-resizer-s,
+#explorerWindow.dock-top .repl-resizer-s{ display:block; }
+#replIn{
+    width:100%;
+    resize: vertical;
+    padding: 10px 12px;
+    border-radius: 14px;
+    border: 1px solid rgba(255,255,255,.14);
+    background: rgba(5,8,18,.55);
+    color: rgba(255,255,255,.92);
+    outline:none;
+    font-family: var(--mono);
+    font-size: 12.8px;
+    line-height: 1.45;
+    min-height: 1.5em;       /* Start as one line */
+    overflow: hidden;        /* Hide scrollbars */
+    padding: 4px;
+    box-sizing: border-box;
+}
+#replIn:focus{
+    border-color: rgba(125,211,252,.55);
+    box-shadow: 0 0 0 4px rgba(125,211,252,.10);
+}
+#replHelp{
+    color: rgba(255,255,255,.70);
+    font-size: 12px;
+    line-height: 1.35;
+}
+#replCollapsed{
+    display:none;
+    padding: 10px 12px;
+    color: rgba(255,255,255,.82);
+    font-size: 13px;
+    background: rgba(255,255,255,.03);
+}
+#repl.collapsed #replBody{ display:none; }
+#repl.collapsed #replCollapsed{ display:block; }
+#repl.collapsed{
+    height: min-content !important;
+    width: min-content !important;
+}
+#repl.collapsed #replExplorerToggle{ display:none }
+#repl.collapsed #replSave{ display:none }
+#repl.collapsed #replReload{ display:none }
+#repl.collapsed #replReset{ display:none }
+#repl.collapsed #replClear{ display:none }
