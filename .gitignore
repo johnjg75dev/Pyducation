@@ -17,11 +17,6 @@ env/
 .coverage
 .pytest_cache/
 
-# Pyodide (if not explicitly tracking)
-pyodide.js
-pyodide.asm.wasm
-python_stdlib.zip
-
 # Logs
 *.log
 
