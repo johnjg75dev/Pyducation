@@ -1,0 +1,16 @@
+{
+  "name": "pyducation",
+  "private": true,
+  "description": "Python Internals Decoding Ring (static app) + packaging/dev tooling",
+  "scripts": {
+    "build": "node distribute.js build",
+    "build:offline": "node distribute.js offline",
+    "serve:src": "node distribute.js dev --open",
+    "serve:dist": "node distribute.js preview --open",
+    "verify": "node distribute.js verify --offline",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -17,6 +17,12 @@ A core feature of this application is an integrated, floating Python Read-Eval-P
 
 To get started with the Python Internals Decoding Ring, open `src/index.html` in your web browser.
 
+For best results (and to avoid browser restrictions around local files), run the built-in local server:
+
+```bash
+node distribute.js dev
+```
+
 ```bash
 # Assuming you have cloned this repository
 cd Pyducation
@@ -57,6 +63,27 @@ Menu options include:
 3. Download Pyodide assets to dist/
 4. Clean dist/
 5. Status
+6. Verify dist/
+7. Serve src/ (local HTTP)
+8. Serve dist/ (local HTTP)
+
+CLI shortcuts (no menu):
+
+```bash
+node distribute.js build
+node distribute.js offline
+node distribute.js verify --offline
+node distribute.js dev      # serve src/
+node distribute.js preview  # serve dist/
+```
+
+## Testing
+
+Unit tests cover the packaging script and local server.
+
+```bash
+node --test
+```
 
 ## Usage
 
